@@ -2,15 +2,20 @@ using System.Diagnostics;
 using System.Drawing;
 using ASFW.Graphics;
 using ASFW.Platform.Desktop;
+using ASFW.Platform.Desktop.GLFW;
 
 namespace ADMG;
 
 internal sealed class DisplayWindow : Window
 {
+	private readonly HashSet<KeyboardKey> keysDown = new();
+
+	public IReadOnlySet<KeyboardKey> KeysDown => keysDown;
+
 	private readonly TimeSpan targetFrameTime = TimeSpan.FromSeconds(1 / 60.0);
 	private readonly Stopwatch frameTimer = Stopwatch.StartNew();
+	private readonly Color[] pixels;
 	private readonly Texture texture;
-	private readonly object textureLock = new();
 
 	private bool committed = false;
 
@@ -21,21 +26,23 @@ internal sealed class DisplayWindow : Window
 		Resizable = false
 	})
 	{
+		pixels = new Color[width * height];
 		texture = new(width, height);
 	}
 
 	protected override void OnRender()
 	{
-		if (committed)
-		{
-			lock (textureLock)
-			{
-				texture.Unlock();
-				Renderer.CommitBatch();
-				Renderer.DrawTexture(new(0, 0), new(Size.Width, Size.Height), texture, Color.White);
-			}
-			committed = false;
-		}
+		if (!committed)
+			return;
+		
+		texture.Lock();
+		for (var i = 0; i < pixels.Length; i++)
+			texture[i % texture.Width, i / texture.Width] = pixels[i];
+		texture.Unlock();
+		committed = false;
+
+		Renderer.Clear(Color.Black);
+		Renderer.DrawTexture(new(0, 0), new(Size.Width, Size.Height), texture, Color.White);
 
 		var sleepTime = targetFrameTime - frameTimer.Elapsed;
 		if (sleepTime.Ticks > 0)
@@ -44,17 +51,26 @@ internal sealed class DisplayWindow : Window
 		frameTimer.Restart();
 	}
 
+	protected override void OnKeyDown(KeyboardKey key, ModifierKeys modifiers)
+	{
+		keysDown.Add(key);
+	}
+
+	protected override void OnKeyUp(KeyboardKey key, ModifierKeys modifiers)
+	{
+		keysDown.Remove(key);
+	}
+
 	public void Commit() => committed = true;
 
 	public Color this[int x, int y]
 	{
 		set
 		{
-			lock (textureLock)
-			{
-				texture.Lock();
-				texture[x, y] = value;
-			}
+			if (x < 0 || y < 0 || x >= texture.Width || y >= texture.Height)
+				throw new IndexOutOfRangeException();
+
+			pixels[x + y * texture.Width] = value;
 		}
 	}
 

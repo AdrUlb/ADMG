@@ -96,6 +96,7 @@ internal sealed class PPU
 
 			if (LcdY == 144)
 			{
+				DisplayFrame();
 				dmg.InterruptController.RequestVBlank = true;
 				mode = Mode.VBlank;
 			}
@@ -115,7 +116,6 @@ internal sealed class PPU
 			dot = 0;
 			LcdY = 0;
 			mode = Mode.OamScan;
-			DisplayFrame();
 		}
 	}
 

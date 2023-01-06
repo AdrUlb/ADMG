@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Drawing;
 using ASFW;
+using ASFW.Platform.Desktop;
 
 namespace ADMG;
 
@@ -16,22 +17,24 @@ internal sealed class DMG : IDisposable
 	
 	public readonly DisplayWindow Display;
 	public readonly DisplayWindow VramWindow;
-	
 	public readonly Cartridge Cartridge;
 	public readonly InterruptController InterruptController;
+	public readonly Joypad Joypad;
 	public readonly Bus Bus;
 	public readonly PPU Ppu;
+	public readonly Timer Timer;
 	private readonly CPU cpu;
 	
 	public DMG()
 	{
 		Display = new("ADMG", 160, 144, 2);
 		VramWindow = new("ADMG Tile Viewer", 16 * 8, 24 * 8, 2);
-		
 		Cartridge = new(File.ReadAllBytes("/home/adrian/Roms/GB/tetris.gb"));
 		InterruptController = new();
+		Joypad = new();
 		Bus = new(this);
 		Ppu = new(this);
+		Timer = new Timer(this);
 		cpu = new(Bus, InterruptController);
 	}
 
@@ -58,6 +61,16 @@ internal sealed class DMG : IDisposable
 		{
 			Asfw.DoEvents();
 
+			Joypad.StartPressed = Display.KeysDown.Contains(KeyboardKey.Enter);
+			Joypad.SelectPressed = Display.KeysDown.Contains(KeyboardKey.Space);
+			Joypad.APressed = Display.KeysDown.Contains(KeyboardKey.S);
+			Joypad.BPressed = Display.KeysDown.Contains(KeyboardKey.A);
+			Joypad.UpPressed = Display.KeysDown.Contains(KeyboardKey.Up);
+			Joypad.DownPressed = Display.KeysDown.Contains(KeyboardKey.Down);
+			Joypad.LeftPressed = Display.KeysDown.Contains(KeyboardKey.Left);
+			Joypad.RightPressed = Display.KeysDown.Contains(KeyboardKey.Right);
+			//Joypad.StartPressed = true;
+
 			var cycles = 0;
 
 			while (cycles < cyclesPerFrame)
@@ -66,13 +79,14 @@ internal sealed class DMG : IDisposable
 					cpu.Cycle();
 
 				Ppu.Cycle();
+				Timer.Cycle();
 				
 				cycles++;
 			}
 
 			long thisTime;
 
-			Console.WriteLine(Stopwatch.GetElapsedTime(lastTime).TotalMilliseconds);
+			//Console.WriteLine(Stopwatch.GetElapsedTime(lastTime).TotalMilliseconds);
 			do
 			{
 				thisTime = Stopwatch.GetTimestamp();

@@ -18,7 +18,11 @@ internal sealed class Bus
 		get => address switch
 		{
 			<= 0x7FFF => dmg.Cartridge[address],
-			0xFF00 => 0xFF, // Hack: report no buttons pressed
+			0xFF00 => dmg.Joypad.Control,
+			0xFF04 => dmg.Timer.Divider,
+			0xFF05 => dmg.Timer.Counter,
+			0xFF06 => dmg.Timer.Modulo,
+			0xFF07 => dmg.Timer.Control,
 			0xFF0F => dmg.InterruptController.Requested,
 			0xFF40 => dmg.Ppu.LcdControl,
 			0xFF44 => dmg.Ppu.LcdY,
@@ -32,6 +36,21 @@ internal sealed class Bus
 			{
 				case <= 0x7FFF:
 					dmg.Cartridge[address] = value;
+					break;
+				case 0xFF00:
+					dmg.Joypad.Control = value;
+					break;
+				case 0xFF04:
+					dmg.Timer.Divider = 0;
+					break;
+				case 0xFF05:
+					dmg.Timer.Counter = value;
+					break;
+				case 0xFF06:
+					dmg.Timer.Modulo = value;
+					break;
+				case 0xFF07:
+					dmg.Timer.Control = value;
 					break;
 				case 0xFF0F:
 					dmg.InterruptController.Requested = value;
