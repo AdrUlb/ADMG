@@ -12,7 +12,7 @@ internal sealed class DMG : IDisposable
 	
 	public DMG()
 	{
-		cartridge = new(File.ReadAllBytes("Roms/blargg/cpu_instrs/individual/03-op sp,hl.gb"));
+		cartridge = new(File.ReadAllBytes("Roms/blargg/cpu_instrs/individual/01-special.gb"));
 		bus = new(cartridge);
 		cpu = new(bus);
 		display = new();

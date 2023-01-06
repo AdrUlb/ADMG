@@ -93,7 +93,7 @@ internal sealed class CPU
 		Reg8Id.MHL => bus[RegHL],
 		Reg8Id.A => (byte)(RegAF >> 8),
 
-		Reg8Id.F => (byte)(RegAF),
+		Reg8Id.F => (byte)(RegAF & 0xFF),
 		Reg8Id.SPHi => (byte)(RegSP >> 8),
 		Reg8Id.SPLo => (byte)RegSP,
 		_ => throw new UnreachableException()
@@ -300,6 +300,8 @@ internal sealed class CPU
 			default:
 				throw new NotImplementedException($"Instruction not implemented: 0x{op:X2} (x:{opX},y:{opY},z:{opZ},p:{opP},q:{opQ}) - PC:{RegPC - 1:X4} AF:{RegAF:X4} BC:{RegBC:X4} DE:{RegDE:X4} HL:{RegHL:X4} SP:{RegSP:X4}.");
 		}
+
+		RegAF &= 0xFFF0;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -632,6 +634,41 @@ internal sealed class CPU
 						opCycle = 0;
 						break;
 					}
+					case 4: // DAA
+					{
+						int temp = GetReg8(Reg8Id.A);
+
+						if (!GetFlag(FlagId.Negative))
+						{
+							if (GetFlag(FlagId.HalfCarry) || (temp & 0x0F) > 9)
+								temp += 6;
+							if (GetFlag(FlagId.Carry) || temp > 0x9F)
+								temp += 0x60;
+						}
+						else
+						{
+							if (GetFlag(FlagId.HalfCarry))
+							{
+								temp -= 6;
+								if (!GetFlag(FlagId.Carry))
+									temp &= 0xFF;
+							}
+							if (GetFlag(FlagId.Carry))
+								temp -= 0x60;
+						}
+
+						SetFlag(FlagId.HalfCarry, false);
+
+						if ((temp & 0x100) != 0)
+							SetFlag(FlagId.Carry, true);
+						
+						SetReg8(Reg8Id.A, (byte)(temp & 0xFF));
+
+						SetFlag(FlagId.Zero, (byte)(temp & 0xFF) == 0);
+						
+						opCycle = 0;
+						break;
+					}
 					default:
 						return false;
 				}
@@ -838,6 +875,23 @@ internal sealed class CPU
 			case 2:
 				switch (opY)
 				{
+					case >= 0 and <= 3: // JP cond, u16
+						switch (opCycle)
+						{
+							case 2:
+								readLo = bus[RegPC++];
+								break;
+							case 3:
+								readHi = bus[RegPC++];
+								if (!CheckCondition((ConditionId)opY))
+									opCycle = 0;
+								break;
+							case 4:
+								RegPC = read16;
+								opCycle = 0;
+								break;
+						}
+						break;
 					case 5: // LD (u16), A
 						switch (opCycle)
 						{
