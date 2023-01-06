@@ -26,7 +26,7 @@ internal sealed class DMG : IDisposable
 
 		const int framesPerSecond = 60;
 		var ticksPerFrame = Stopwatch.Frequency / framesPerSecond;
-		const int cyclesPerSecond = 4194304; // 4MHz
+		const int cyclesPerSecond = 4194304; // ~4MHz
 		const long cyclesPerFrame = cyclesPerSecond / framesPerSecond;
 
 		const int cpuClockDivider = 4;
@@ -54,7 +54,7 @@ internal sealed class DMG : IDisposable
 				thisTime = Stopwatch.GetTimestamp();
 			}
 			while (thisTime - lastTime < ticksPerFrame);
-			Console.WriteLine(Stopwatch.GetElapsedTime(lastTime).TotalMilliseconds);
+			//Console.WriteLine(Stopwatch.GetElapsedTime(lastTime).TotalMilliseconds);
 			lastTime = thisTime;
 		}
 	}

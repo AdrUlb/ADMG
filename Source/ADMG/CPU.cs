@@ -25,8 +25,12 @@ internal sealed class CPU
 
 	private ushort read16 => (ushort)((readHi << 8) | readLo);
 
+	private readonly StreamWriter log;
+	
 	public CPU(Bus bus)
 	{
+		log = new StreamWriter("log.txt");
+		
 		this.bus = bus;
 		RegBC = 0x0013;
 		RegDE = 0x00D8;
@@ -178,7 +182,7 @@ internal sealed class CPU
 	};
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private bool GetCondition(ConditionId id) => id switch
+	private bool CheckCondition(ConditionId id) => id switch
 	{
 		ConditionId.NotZero => !GetFlag(FlagId.Zero),
 		ConditionId.Zero => GetFlag(FlagId.Zero),
@@ -242,6 +246,11 @@ internal sealed class CPU
 
 	public void Cycle()
 	{
+		if (opCycle == 0)
+		{
+			log.WriteLine($"A:{GetReg8(Reg8Id.A):X2} F:{GetReg8(Reg8Id.F):X2} B:{GetReg8(Reg8Id.B):X2} C:{GetReg8(Reg8Id.C):X2} D:{GetReg8(Reg8Id.D):X2} E:{GetReg8(Reg8Id.E):X2} H:{GetReg8(Reg8Id.H):X2} L:{GetReg8(Reg8Id.L):X2} SP:{GetReg8(Reg8Id.SPHi):X2}{GetReg8(Reg8Id.SPLo):X2} PC:{RegPC:X4} PCMEM:{bus[RegPC]:X2},{bus[(ushort)(RegPC + 1)]:X2},{bus[(ushort)(RegPC + 2)]:X2},{bus[(ushort)(RegPC + 3)]:X2}");
+		}
+		
 		if (opCycle++ == 0)
 			op = bus[RegPC++];
 
@@ -252,17 +261,17 @@ internal sealed class CPU
 		var opP = opY >> 1;
 		var opQ = opY & 1;
 
-		if (opCycle == 1)
+		/*if (opCycle == 1)
 		{
-			//if (RegPC - 1 == 0x020B)
-			trace = true;
+			if (RegPC - 1 == 0xD801)
+				trace = true;
 
 			if (trace)
 			{
-				//Console.WriteLine($"0x{RegPC - 1:X4} 0x{op:X2} - AF:{RegAF:X4} BC:{RegBC:X4} DE:{RegDE:X4} HL:{RegHL:X4} SP:{RegSP:X4}");
-				//Console.ReadKey(true);
+				Console.WriteLine($"0x{RegPC - 1:X4} 0x{op:X2} - AF:{RegAF:X4} BC:{RegBC:X4} DE:{RegDE:X4} HL:{RegHL:X4} SP:{RegSP:X4}");
+				Console.ReadKey(true);
 			}
-		}
+		}*/
 
 		switch (opX)
 		{
@@ -271,8 +280,7 @@ internal sealed class CPU
 					goto default;
 				break;
 			case 1:
-				if (!CycleX1())
-					goto default;
+				CycleX1();
 				break;
 			case 2:
 				CycleX2();
@@ -282,7 +290,7 @@ internal sealed class CPU
 					goto default;
 				break;
 			default:
-				throw new NotImplementedException($"Instruction not implemented: 0x{op:X2} (x:{opX},y:{opY},z:{opZ},p:{opP},q:{opQ}).");
+				throw new NotImplementedException($"Instruction not implemented: 0x{op:X2} (x:{opX},y:{opY},z:{opZ},p:{opP},q:{opQ}) - 0x{RegPC - 1:X4} 0x{op:X2} - AF:{RegAF:X4} BC:{RegBC:X4} DE:{RegDE:X4} HL:{RegHL:X4} SP:{RegSP:X4}.");
 		}
 	}
 
@@ -308,7 +316,7 @@ internal sealed class CPU
 							case 2:
 								readLo = bus[RegPC++];
 								// Not an unconditional jump and condition not true
-								if (opY != 3 && !GetCondition((ConditionId)(opY - 4)))
+								if (opY != 3 && !CheckCondition((ConditionId)(opY - 4)))
 									opCycle = 0;
 								break;
 							case 3:
@@ -476,6 +484,8 @@ internal sealed class CPU
 								break;
 						}
 						break;
+					default:
+						return false;
 				}
 				break;
 			case 4: // INC r8
@@ -535,6 +545,51 @@ internal sealed class CPU
 						break;
 				}
 				break;
+			case 7:
+				switch (opY)
+				{
+					case 2: // RLA
+					{
+						var value = GetReg8(Reg8Id.A);
+						
+						var msb = value >> 7;
+
+						value <<= 1;
+						if (GetFlag(FlagId.Carry))
+							value |= 1;
+
+						SetFlag(FlagId.Zero, false);
+						SetFlag(FlagId.Negative, false);
+						SetFlag(FlagId.HalfCarry, false);
+						SetFlag(FlagId.Carry, msb == 1);
+						
+						SetReg8(Reg8Id.A, value);
+						opCycle = 0;
+						break;
+					}
+					case 3: // RRA
+					{
+						var value = GetReg8(Reg8Id.A);
+						
+						var lsb = value & 1;
+
+						value >>= 1;
+						if (GetFlag(FlagId.Carry))
+							value |= 1 << 7;
+
+						SetFlag(FlagId.Zero, false);
+						SetFlag(FlagId.Negative, false);
+						SetFlag(FlagId.HalfCarry, false);
+						SetFlag(FlagId.Carry, lsb == 1);
+						
+						SetReg8(Reg8Id.A, value);
+						opCycle = 0;
+						break;
+					}
+					default:
+						return false;
+				}
+				break;
 			default:
 				return false;
 		}
@@ -543,18 +598,16 @@ internal sealed class CPU
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private bool CycleX1()
+	private void CycleX1()
 	{
 		var opY = (op >> 3) & 0b111;
 		var opZ = op & 0b111;
-		var opP = opY >> 1;
-		var opQ = opY & 1;
 
 		if ((Reg8Id)opZ == Reg8Id.MHL && (Reg8Id)opY == Reg8Id.MHL) // HALT
 		{
 			// TODO: HALT
 			opCycle = 0;
-			return true;
+			return;
 		}
 
 		switch (opCycle) // LD r8, r8
@@ -568,8 +621,6 @@ internal sealed class CPU
 				opCycle = 0;
 				break;
 		}
-
-		return true;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -578,7 +629,7 @@ internal sealed class CPU
 		var opY = (op >> 3) & 0b111;
 		var opZ = op & 0b111;
 
-		if (opCycle == 0)
+		if (opCycle == 1)
 		{
 			readLo = GetReg8((Reg8Id)opZ);
 			if ((Reg8Id)opZ == Reg8Id.MHL)
@@ -603,6 +654,25 @@ internal sealed class CPU
 			case 0:
 				switch (opY)
 				{
+					case >= 0 and <= 3:
+						switch (opCycle)
+						{
+							case 2:
+								if (!CheckCondition((ConditionId)opY))
+									opCycle = 0;
+								break;
+							case 3:
+								readLo = bus[RegSP++];
+								break;
+							case 4:
+								readHi = bus[RegSP++];
+								break;
+							case 5:
+								RegPC = read16;
+								opCycle = 0;
+								break;
+						}
+						break;
 					case 4: // LD (FF00+u8), A
 						switch (opCycle)
 						{
@@ -727,7 +797,7 @@ internal sealed class CPU
 								break;
 						}
 						break;
-					case 1:
+					case 1: // CB prefix
 					{
 						switch (opCycle)
 						{
@@ -906,7 +976,7 @@ internal sealed class CPU
 						break;
 					case 3:
 						readHi = bus[RegPC++];
-						if (!GetCondition((ConditionId)opY))
+						if (!CheckCondition((ConditionId)opY))
 							opCycle = 0;
 						break;
 					case 5:
@@ -986,14 +1056,14 @@ internal sealed class CPU
 
 		switch (id)
 		{
-			case 0: // ADD A, r8
+			case 0: // ADD A
 				SetFlag(FlagId.HalfCarry, (((regA & 0xF) + (value & 0xF)) & 0x10) == 0x10);
 				SetFlag(FlagId.Carry, regA + value > 0xFF);
 				regA += value;
 				SetFlag(FlagId.Zero, regA == 0);
 				SetFlag(FlagId.Negative, false);
 				break;
-			case 1: // ADC A, r8
+			case 1: // ADC A
 			{
 				var carry = GetFlag(FlagId.Carry) ? (byte)1 : (byte)0;
 				SetFlag(FlagId.HalfCarry, (((regA & 0xF) + (value & 0xF) + carry) & 0x10) == 0x10);
@@ -1004,14 +1074,14 @@ internal sealed class CPU
 				SetFlag(FlagId.Negative, false);
 				break;
 			}
-			case 2: // SUB A, r8
+			case 2: // SUB A
 				SetFlag(FlagId.HalfCarry, (((regA & 0xF) - (value & 0xF)) & 0x10) == 0x10);
 				SetFlag(FlagId.Carry, regA - value < 0);
 				regA -= value;
 				SetFlag(FlagId.Zero, regA == 0);
 				SetFlag(FlagId.Negative, true);
 				break;
-			case 3: // SBC A, r8
+			case 3: // SBC A
 			{
 				var carry = GetFlag(FlagId.Carry) ? (byte)1 : (byte)0;
 				SetFlag(FlagId.HalfCarry, (((regA & 0xF) - (value & 0xF) - carry) & 0x10) == 0x10);
@@ -1022,33 +1092,34 @@ internal sealed class CPU
 				SetFlag(FlagId.Negative, true);
 				break;
 			}
-			case 4: // AND A, r8
+			case 4: // AND A
 				regA &= value;
 				SetFlag(FlagId.Zero, regA == 0);
 				SetFlag(FlagId.Negative, false);
 				SetFlag(FlagId.HalfCarry, true);
 				SetFlag(FlagId.Carry, false);
 				break;
-			case 5: // XOR A, r8
+			case 5: // XOR A
 				regA ^= value;
 				SetFlag(FlagId.Zero, regA == 0);
 				SetFlag(FlagId.Negative, false);
 				SetFlag(FlagId.HalfCarry, false);
 				SetFlag(FlagId.Carry, false);
 				break;
-			case 6: // OR A, r8
+			case 6: // OR A
 				regA |= value;
 				SetFlag(FlagId.Zero, regA == 0);
 				SetFlag(FlagId.Negative, false);
 				SetFlag(FlagId.HalfCarry, false);
 				SetFlag(FlagId.Carry, false);
 				break;
-			case 7: // CP A, r8
+			case 7: // CP A
 				SetFlag(FlagId.HalfCarry, (((regA & 0xF) - (value & 0xF)) & 0x10) == 0x10);
 				SetFlag(FlagId.Carry, regA - value < 0);
+				regA -= value;
 				SetFlag(FlagId.Zero, regA == 0);
 				SetFlag(FlagId.Negative, true);
-				break;
+				return;
 		}
 
 		SetReg8(Reg8Id.A, regA);

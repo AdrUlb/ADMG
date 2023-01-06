@@ -17,6 +17,7 @@ internal sealed class Bus
 		get => address switch
 		{
 			<= 0x7FFF => cartridge[address],
+			0xFF44 => 0x90,
 			_ => temp[address]
 		};
 
