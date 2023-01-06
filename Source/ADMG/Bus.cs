@@ -3,21 +3,26 @@ namespace ADMG;
 internal sealed class Bus
 {
 	private readonly Cartridge cartridge;
+	private readonly PPU ppu;
 	private readonly byte[] temp;
 	private byte tempSerial = 0;
-	
-	public Bus(Cartridge cartridge)
+
+	public Bus(Cartridge cartridge, PPU ppu)
 	{
 		this.cartridge = cartridge;
+		this.ppu = ppu;
 		temp = new byte[0x10000];
+		for (var i = 0; i < temp.Length; i++)
+			temp[i] = 0xFF;
 	}
-	
+
 	public byte this[ushort address]
 	{
 		get => address switch
 		{
 			<= 0x7FFF => cartridge[address],
-			0xFF44 => 0x90,
+			0xFF00 => 0xFF, // Hack: report no b
+			0xFF44 => ppu.Ly,
 			_ => temp[address]
 		};
 

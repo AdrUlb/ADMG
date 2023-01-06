@@ -256,8 +256,8 @@ internal sealed class CPU
 
 	public void Cycle()
 	{
-		if (opCycle == 0)
-			log.WriteLine($"A:{GetReg8(Reg8Id.A):X2} F:{GetReg8(Reg8Id.F):X2} B:{GetReg8(Reg8Id.B):X2} C:{GetReg8(Reg8Id.C):X2} D:{GetReg8(Reg8Id.D):X2} E:{GetReg8(Reg8Id.E):X2} H:{GetReg8(Reg8Id.H):X2} L:{GetReg8(Reg8Id.L):X2} SP:{GetReg8(Reg8Id.SPHi):X2}{GetReg8(Reg8Id.SPLo):X2} PC:{RegPC:X4} PCMEM:{bus[RegPC]:X2},{bus[(ushort)(RegPC + 1)]:X2},{bus[(ushort)(RegPC + 2)]:X2},{bus[(ushort)(RegPC + 3)]:X2}");
+		//if (opCycle == 0)
+		//	log.WriteLine($"A:{GetReg8(Reg8Id.A):X2} F:{GetReg8(Reg8Id.F):X2} B:{GetReg8(Reg8Id.B):X2} C:{GetReg8(Reg8Id.C):X2} D:{GetReg8(Reg8Id.D):X2} E:{GetReg8(Reg8Id.E):X2} H:{GetReg8(Reg8Id.H):X2} L:{GetReg8(Reg8Id.L):X2} SP:{GetReg8(Reg8Id.SPHi):X2}{GetReg8(Reg8Id.SPLo):X2} PC:{RegPC:X4} PCMEM:{bus[RegPC]:X2},{bus[(ushort)(RegPC + 1)]:X2},{bus[(ushort)(RegPC + 2)]:X2},{bus[(ushort)(RegPC + 3)]:X2}");
 		
 		if (opCycle++ == 0)
 			op = bus[RegPC++];
@@ -271,7 +271,7 @@ internal sealed class CPU
 
 		if (opCycle == 1)
 		{
-			//if (RegPC - 1 == 0xD801)
+			//if (RegPC - 1 == 0x2803)
 				trace = true;
 
 			if (trace)
