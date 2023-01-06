@@ -2,15 +2,12 @@ namespace ADMG;
 
 internal sealed class Bus
 {
-	private readonly Cartridge cartridge;
-	private readonly PPU ppu;
+	private readonly DMG dmg;
 	private readonly byte[] temp;
-	private byte tempSerial = 0;
 
-	public Bus(Cartridge cartridge, PPU ppu)
+	public Bus(DMG dmg)
 	{
-		this.cartridge = cartridge;
-		this.ppu = ppu;
+		this.dmg = dmg;
 		temp = new byte[0x10000];
 		for (var i = 0; i < temp.Length; i++)
 			temp[i] = 0xFF;
@@ -20,9 +17,12 @@ internal sealed class Bus
 	{
 		get => address switch
 		{
-			<= 0x7FFF => cartridge[address],
-			0xFF00 => 0xFF, // Hack: report no b
-			0xFF44 => ppu.Ly,
+			<= 0x7FFF => dmg.Cartridge[address],
+			0xFF00 => 0xFF, // Hack: report no buttons pressed
+			0xFF0F => dmg.InterruptController.Requested,
+			0xFF40 => dmg.Ppu.LcdControl,
+			0xFF44 => dmg.Ppu.LcdY,
+			0xFFFF => dmg.InterruptController.Enabled,
 			_ => temp[address]
 		};
 
@@ -31,14 +31,16 @@ internal sealed class Bus
 			switch (address)
 			{
 				case <= 0x7FFF:
-					cartridge[address] = value;
+					dmg.Cartridge[address] = value;
 					break;
-				case 0xFF01:
-					tempSerial = value;
+				case 0xFF0F:
+					dmg.InterruptController.Requested = value;
 					break;
-				case 0xFF02:
-					if (value == 0x81)
-						Console.Write((char)tempSerial);
+				case 0xFF40:
+					dmg.Ppu.LcdControl = value;
+					break;
+				case 0xFFFF:
+					dmg.InterruptController.Enabled = value;
 					break;
 				default:
 					temp[address] = value;

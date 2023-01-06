@@ -13,6 +13,20 @@
 		<ProjectReference Include="..\..\External\ASFW\Source\ASFW\ASFW.csproj" />
 	</ItemGroup>
 
+	<PropertyGroup>
+		<SelfContained>false</SelfContained>
+		<StripSymbols>true</StripSymbols>
+		<IlcGenerateStackTraceData>false</IlcGenerateStackTraceData>
+		<IlcOptimizationPreference>Speed</IlcOptimizationPreference>
+		<IlcDisableReflection>true</IlcDisableReflection>
+		<RootAllApplicationAssemblies>false</RootAllApplicationAssemblies>
+		<IlcGenerateCompleteTypeMetadata>false</IlcGenerateCompleteTypeMetadata>
+		<IlcDisableUnhandledExceptionExperience>true</IlcDisableUnhandledExceptionExperience>
+		<IlcTrimMetadata>true</IlcTrimMetadata>
+		<IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
+		<IlcInstructionSet>avx2,bmi2,fma,pclmul,popcnt,aes</IlcInstructionSet>
+	</PropertyGroup>
+
 	<ItemGroup>
 		<None Update="Assets/**">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>

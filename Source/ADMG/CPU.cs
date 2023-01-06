@@ -7,6 +7,7 @@ namespace ADMG;
 
 internal sealed class CPU
 {
+	private readonly InterruptController interruptController;
 	private readonly Bus bus;
 
 	public ushort RegBC;
@@ -17,21 +18,25 @@ internal sealed class CPU
 	public ushort RegSP;
 	public ushort RegPC;
 
+	private bool processedInts = false;
+	private bool intsEnabled = false;
 
 	private int op;
 	private int opCycle = 0;
+
 	private byte readLo;
 	private byte readHi;
 
 	private ushort read16 => (ushort)((readHi << 8) | readLo);
 
 	private readonly StreamWriter log;
-	
-	public CPU(Bus bus)
+
+	public CPU(Bus bus, InterruptController interruptController)
 	{
 		log = new StreamWriter("log.txt");
-		
+
 		this.bus = bus;
+		this.interruptController = interruptController;
 		RegBC = 0x0013;
 		RegDE = 0x00D8;
 		RegHL = 0x014D;
@@ -258,9 +263,62 @@ internal sealed class CPU
 	{
 		//if (opCycle == 0)
 		//	log.WriteLine($"A:{GetReg8(Reg8Id.A):X2} F:{GetReg8(Reg8Id.F):X2} B:{GetReg8(Reg8Id.B):X2} C:{GetReg8(Reg8Id.C):X2} D:{GetReg8(Reg8Id.D):X2} E:{GetReg8(Reg8Id.E):X2} H:{GetReg8(Reg8Id.H):X2} L:{GetReg8(Reg8Id.L):X2} SP:{GetReg8(Reg8Id.SPHi):X2}{GetReg8(Reg8Id.SPLo):X2} PC:{RegPC:X4} PCMEM:{bus[RegPC]:X2},{bus[(ushort)(RegPC + 1)]:X2},{bus[(ushort)(RegPC + 2)]:X2},{bus[(ushort)(RegPC + 3)]:X2}");
-		
-		if (opCycle++ == 0)
+
+		if (opCycle == 0 && !processedInts && (interruptController.Enabled & interruptController.Requested) != 0)
+		{
+			if (!intsEnabled)
+			{
+				processedInts = true;
+				return;
+			}
+
+			intsEnabled = false;
+			
+			bus[--RegSP] = (byte)(RegPC >> 8);
+			bus[--RegSP] = (byte)(RegPC & 0xFF);
+
+			if (interruptController is { EnableVBlank: true, RequestVBlank: true })
+			{
+				interruptController.RequestVBlank = false;
+				RegPC = 0x40;
+				return;
+			}
+
+			if (interruptController is { EnableLcdStat: true, RequestLcdStat: true })
+			{
+				interruptController.RequestLcdStat = false;
+				RegPC = 0x48;
+				return;
+			}
+
+			if (interruptController is { EnableTimer: true, RequestTimer: true })
+			{
+				interruptController.RequestTimer = false;
+				RegPC = 0x50;
+				return;
+			}
+
+			if (interruptController is { EnableSerial: true, RequestSerial: true })
+			{
+				interruptController.RequestSerial = false;
+				RegPC = 0x58;
+				return;
+			}
+
+			if (interruptController is { EnableJoypad: true, RequestJoypad: true })
+			{
+				interruptController.RequestJoypad = false;
+				RegPC = 0x60;
+				return;
+			}
+
+			throw new UnreachableException();
+		}
+
+		if (++opCycle == 1)
+		{
 			op = bus[RegPC++];
+		}
 
 		var opX = op >> 6;
 
@@ -272,7 +330,7 @@ internal sealed class CPU
 		if (opCycle == 1)
 		{
 			//if (RegPC - 1 == 0x2803)
-				trace = true;
+			trace = true;
 
 			if (trace)
 			{
@@ -298,10 +356,14 @@ internal sealed class CPU
 					goto default;
 				break;
 			default:
-				throw new NotImplementedException($"Instruction not implemented: 0x{op:X2} (x:{opX},y:{opY},z:{opZ},p:{opP},q:{opQ}) - PC:{RegPC - 1:X4} AF:{RegAF:X4} BC:{RegBC:X4} DE:{RegDE:X4} HL:{RegHL:X4} SP:{RegSP:X4}.");
+				throw new NotImplementedException(
+					$"Instruction not implemented: 0x{op:X2} (x:{opX},y:{opY},z:{opZ},p:{opP},q:{opQ}) - PC:{RegPC - 1:X4} AF:{RegAF:X4} BC:{RegBC:X4} DE:{RegDE:X4} HL:{RegHL:X4} SP:{RegSP:X4}.");
 		}
 
 		RegAF &= 0xFFF0;
+
+		if (opCycle == 0)
+			processedInts = false;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -378,9 +440,9 @@ internal sealed class CPU
 							case 1:
 							{
 								var r16 = GetReg16((Reg16Id)opP);
-								
+
 								SetFlag(FlagId.HalfCarry, (((RegHL & 0b111111111111) + (r16 & 0b111111111111)) & (1 << 12)) == (1 << 12));
-								SetFlag(FlagId.Carry, RegHL + r16 > 0xFFFF);	
+								SetFlag(FlagId.Carry, RegHL + r16 > 0xFFFF);
 								RegHL += r16;
 								SetFlag(FlagId.Negative, false);
 								break;
@@ -608,9 +670,9 @@ internal sealed class CPU
 						SetFlag(FlagId.Negative, false);
 						SetFlag(FlagId.HalfCarry, false);
 						SetFlag(FlagId.Carry, msb == 1);
-						
+
 						SetReg8(Reg8Id.A, value);
-						
+
 						opCycle = 0;
 						break;
 					}
@@ -628,14 +690,14 @@ internal sealed class CPU
 						SetFlag(FlagId.Carry, lsb == 1);
 
 						SetReg8(Reg8Id.A, value);
-						
+
 						opCycle = 0;
 						break;
 					}
 					case 2: // RLA
 					{
 						var value = GetReg8(Reg8Id.A);
-						
+
 						var msb = value >> 7;
 
 						value <<= 1;
@@ -646,7 +708,7 @@ internal sealed class CPU
 						SetFlag(FlagId.Negative, false);
 						SetFlag(FlagId.HalfCarry, false);
 						SetFlag(FlagId.Carry, msb == 1);
-						
+
 						SetReg8(Reg8Id.A, value);
 						opCycle = 0;
 						break;
@@ -654,7 +716,7 @@ internal sealed class CPU
 					case 3: // RRA
 					{
 						var value = GetReg8(Reg8Id.A);
-						
+
 						var lsb = value & 1;
 
 						value >>= 1;
@@ -665,7 +727,7 @@ internal sealed class CPU
 						SetFlag(FlagId.Negative, false);
 						SetFlag(FlagId.HalfCarry, false);
 						SetFlag(FlagId.Carry, lsb == 1);
-						
+
 						SetReg8(Reg8Id.A, value);
 						opCycle = 0;
 						break;
@@ -697,11 +759,11 @@ internal sealed class CPU
 
 						if ((temp & 0x100) != 0)
 							SetFlag(FlagId.Carry, true);
-						
+
 						SetReg8(Reg8Id.A, (byte)(temp & 0xFF));
 
 						SetFlag(FlagId.Zero, (byte)(temp & 0xFF) == 0);
-						
+
 						opCycle = 0;
 						break;
 					}
@@ -908,7 +970,7 @@ internal sealed class CPU
 								}
 								break;
 							case 1: // RETI
-								// TODO: enable interrupts
+								intsEnabled = true;
 								goto case 0;
 							case 2: // JP HL
 								RegPC = RegHL;
@@ -1040,7 +1102,7 @@ internal sealed class CPU
 
 												readHi <<= 1;
 												readHi |= (byte)msb;
-												
+
 												SetFlag(FlagId.Zero, readHi == 0);
 												SetFlag(FlagId.Negative, false);
 												SetFlag(FlagId.HalfCarry, false);
@@ -1053,7 +1115,7 @@ internal sealed class CPU
 
 												readHi >>= 1;
 												readHi |= (byte)(lsb << 7);
-												
+
 												SetFlag(FlagId.Zero, readHi == 0);
 												SetFlag(FlagId.Negative, false);
 												SetFlag(FlagId.HalfCarry, false);
@@ -1063,11 +1125,11 @@ internal sealed class CPU
 											case 2: // RL r8
 											{
 												var msb = readHi >> 7;
-												
+
 												readHi <<= 1;
 												if (GetFlag(FlagId.Carry))
 													readHi |= 1;
-												
+
 												SetFlag(FlagId.Zero, readHi == 0);
 												SetFlag(FlagId.Negative, false);
 												SetFlag(FlagId.HalfCarry, false);
@@ -1077,11 +1139,11 @@ internal sealed class CPU
 											case 3: // RR r8
 											{
 												var lsb = readHi & 1;
-												
+
 												readHi >>= 1;
 												if (GetFlag(FlagId.Carry))
 													readHi |= 1 << 7;
-												
+
 												SetFlag(FlagId.Zero, readHi == 0);
 												SetFlag(FlagId.Negative, false);
 												SetFlag(FlagId.HalfCarry, false);
@@ -1093,7 +1155,7 @@ internal sealed class CPU
 												var msb = readHi >> 7;
 
 												readHi <<= 1;
-												
+
 												SetFlag(FlagId.Zero, readHi == 0);
 												SetFlag(FlagId.Negative, false);
 												SetFlag(FlagId.HalfCarry, false);
@@ -1107,7 +1169,7 @@ internal sealed class CPU
 												var msb = readHi >> 7;
 												readHi >>= 1;
 												readHi |= (byte)(msb << 7);
-												
+
 												SetFlag(FlagId.Zero, readHi == 0);
 												SetFlag(FlagId.Negative, false);
 												SetFlag(FlagId.HalfCarry, false);
@@ -1122,7 +1184,7 @@ internal sealed class CPU
 												var result = (lo << 4) | hi;
 
 												readHi = (byte)result;
-												
+
 												SetFlag(FlagId.Zero, readHi == 0);
 												SetFlag(FlagId.Negative, false);
 												SetFlag(FlagId.HalfCarry, false);
@@ -1134,7 +1196,7 @@ internal sealed class CPU
 												var lsb = readHi & 1;
 
 												readHi >>= 1;
-												
+
 												SetFlag(FlagId.Zero, readHi == 0);
 												SetFlag(FlagId.Negative, false);
 												SetFlag(FlagId.HalfCarry, false);
@@ -1175,11 +1237,11 @@ internal sealed class CPU
 						break;
 					}
 					case 6: // DI
-						// TODO: DI
+						intsEnabled = false;
 						opCycle = 0;
 						break;
 					case 7: // EI
-						// TODO: EI
+						intsEnabled = true;
 						opCycle = 0;
 						break;
 					default:

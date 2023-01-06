@@ -14,32 +14,36 @@ internal sealed class DMG : IDisposable
 		Color.Black,
 	};
 	
-	private readonly Cartridge cartridge;
-	private readonly PPU ppu;
-	private readonly Bus bus;
+	public readonly DisplayWindow Display;
+	public readonly DisplayWindow VramWindow;
+	
+	public readonly Cartridge Cartridge;
+	public readonly InterruptController InterruptController;
+	public readonly Bus Bus;
+	public readonly PPU Ppu;
 	private readonly CPU cpu;
-	private readonly DisplayWindow vramWindow;
-	private readonly DisplayWindow display;
 	
 	public DMG()
 	{
-		cartridge = new(File.ReadAllBytes("/home/adrian/Roms/GB/tetris.gb"));
-		ppu = new();
-		bus = new(cartridge, ppu);
-		cpu = new(bus);
-		vramWindow = new("ADMG Tile Viewer", 16 * 8, 24 * 8, 2);
-		display = new("ADMG", 160, 144, 2);
+		Display = new("ADMG", 160, 144, 2);
+		VramWindow = new("ADMG Tile Viewer", 16 * 8, 24 * 8, 2);
+		
+		Cartridge = new(File.ReadAllBytes("/home/adrian/Roms/GB/tetris.gb"));
+		InterruptController = new();
+		Bus = new(this);
+		Ppu = new(this);
+		cpu = new(Bus, InterruptController);
 	}
 
 	public void Start()
 	{
-		vramWindow.TrySetDarkMode(true);
-		vramWindow.Visible = true;
-		vramWindow.Start();
+		VramWindow.TrySetDarkMode(true);
+		VramWindow.Visible = true;
+		VramWindow.Start();
 		
-		display.TrySetDarkMode(true);
-		display.Visible = true;
-		display.Start();
+		Display.TrySetDarkMode(true);
+		Display.Visible = true;
+		Display.Start();
 
 		const int framesPerSecond = 60;
 		var ticksPerFrame = Stopwatch.Frequency / framesPerSecond;
@@ -50,7 +54,7 @@ internal sealed class DMG : IDisposable
 		
 		var lastTime = Stopwatch.GetTimestamp();
 
-		while (display.IsRunning)
+		while (Display.IsRunning)
 		{
 			Asfw.DoEvents();
 
@@ -61,67 +65,11 @@ internal sealed class DMG : IDisposable
 				if (cycles % cpuClockDivider == 0)
 					cpu.Cycle();
 
-				ppu.Cycle();
+				Ppu.Cycle();
 				
 				cycles++;
 			}
 
-			for (var i = 0; i < 384; i++)
-			{
-				var tileOffset = i * 16;
-				
-				for (var tileRow = 0; tileRow < 8; tileRow++)
-				{
-					var rowOffset = tileRow * 2;
-
-					var rowByte1 = bus[(ushort)(0x8000 + tileOffset + rowOffset)];
-					var rowByte2 = bus[(ushort)(0x8000 + tileOffset + rowOffset + 1)];
-
-					for (var tileCol = 0; tileCol < 8; tileCol++)
-					{
-						var bit1 = (rowByte1 >> (7 - tileCol)) & 1;
-						var bit2 = (rowByte2 >> (7 - tileCol)) & 1;
-						var pix = (bit2 << 1) | bit1;
-						var color = Palette[pix];
-						var x = i % 16 * 8 + tileCol;
-						var y = i / 16 * 8 + tileRow;
-						vramWindow[x, y] = color;
-					}
-				}
-			}
-			vramWindow.Commit();
-
-			for (var i = 0; i < 32 * 32; i++)
-			{
-				var tileIndex = bus[(ushort)(0x9800 + i)];
-				var tileOffset = tileIndex * 16;
-				for (var tileRow = 0; tileRow < 8; tileRow++)
-				{
-					var y = i / 32 * 8 + tileRow;
-					if (y >= 144)
-						break;
-					
-					var rowOffset = tileRow * 2;
-
-					var rowByte1 = bus[(ushort)(0x8000 + tileOffset + rowOffset)];
-					var rowByte2 = bus[(ushort)(0x8000 + tileOffset + rowOffset + 1)];
-
-					for (var tileCol = 0; tileCol < 8; tileCol++)
-					{
-						var x = i % 32 * 8 + tileCol;
-						if (x >= 160)
-							break;
-						
-						var bit1 = (rowByte1 >> (7 - tileCol)) & 1;
-						var bit2 = (rowByte2 >> (7 - tileCol)) & 1;
-						var pix = (bit2 << 1) | bit1;
-						var color = Palette[pix];
-						display[x, y] = color;
-					}
-				}
-			}
-			display.Commit();
-			
 			long thisTime;
 
 			Console.WriteLine(Stopwatch.GetElapsedTime(lastTime).TotalMilliseconds);
@@ -139,7 +87,7 @@ internal sealed class DMG : IDisposable
 	public void Dispose()
 	{
 		GC.SuppressFinalize(this);
-		vramWindow.Dispose();
-		display.Dispose();
+		VramWindow.Dispose();
+		Display.Dispose();
 	}
 }
