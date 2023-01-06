@@ -596,6 +596,42 @@ internal sealed class CPU
 			case 7:
 				switch (opY)
 				{
+					case 0: // RLCA
+					{
+						var value = GetReg8(Reg8Id.A);
+						var msb = value >> 7;
+
+						value <<= 1;
+						value |= (byte)msb;
+
+						SetFlag(FlagId.Zero, false);
+						SetFlag(FlagId.Negative, false);
+						SetFlag(FlagId.HalfCarry, false);
+						SetFlag(FlagId.Carry, msb == 1);
+						
+						SetReg8(Reg8Id.A, value);
+						
+						opCycle = 0;
+						break;
+					}
+					case 1: // RRCA
+					{
+						var value = GetReg8(Reg8Id.A);
+						var lsb = value & 1;
+
+						value >>= 1;
+						value |= (byte)(lsb << 7);
+
+						SetFlag(FlagId.Zero, false);
+						SetFlag(FlagId.Negative, false);
+						SetFlag(FlagId.HalfCarry, false);
+						SetFlag(FlagId.Carry, lsb == 1);
+
+						SetReg8(Reg8Id.A, value);
+						
+						opCycle = 0;
+						break;
+					}
 					case 2: // RLA
 					{
 						var value = GetReg8(Reg8Id.A);
@@ -669,6 +705,24 @@ internal sealed class CPU
 						opCycle = 0;
 						break;
 					}
+					case 5: // CPL
+						SetReg8(Reg8Id.A, (byte)~GetReg8(Reg8Id.A));
+						SetFlag(FlagId.Negative, true);
+						SetFlag(FlagId.HalfCarry, true);
+						opCycle = 0;
+						break;
+					case 6: // SCF
+						SetFlag(FlagId.Negative, false);
+						SetFlag(FlagId.HalfCarry, false);
+						SetFlag(FlagId.Carry, true);
+						opCycle = 0;
+						break;
+					case 7: // CCF
+						SetFlag(FlagId.Negative, false);
+						SetFlag(FlagId.HalfCarry, false);
+						SetFlag(FlagId.Carry, !GetFlag(FlagId.Carry));
+						opCycle = 0;
+						break;
 					default:
 						return false;
 				}
@@ -853,6 +907,9 @@ internal sealed class CPU
 										break;
 								}
 								break;
+							case 1: // RETI
+								// TODO: enable interrupts
+								goto case 0;
 							case 2: // JP HL
 								RegPC = RegHL;
 								opCycle = 0;
@@ -892,6 +949,13 @@ internal sealed class CPU
 								break;
 						}
 						break;
+					case 4: // LD (0xFF00+C), A
+						if (opCycle == 2)
+						{
+							bus[(ushort)(0xFF00 + GetReg8(Reg8Id.C))] = GetReg8(Reg8Id.A);
+							opCycle = 0;
+						}
+						break;
 					case 5: // LD (u16), A
 						switch (opCycle)
 						{
@@ -905,6 +969,13 @@ internal sealed class CPU
 								bus[read16] = GetReg8(Reg8Id.A);
 								opCycle = 0;
 								break;
+						}
+						break;
+					case 6: // LD A, (0xFF00+C)
+						if (opCycle == 2)
+						{
+							SetReg8(Reg8Id.A, bus[(ushort)(0xFF00 + GetReg8(Reg8Id.C))]);
+							opCycle = 0;
 						}
 						break;
 					case 7: // LD A, (u16)
@@ -1186,6 +1257,19 @@ internal sealed class CPU
 						break;
 					case 2:
 						AluOperation(opY, readLo);
+						opCycle = 0;
+						break;
+				}
+				break;
+			case 7: // RST
+				switch (opCycle)
+				{
+					case 3:
+						bus[--RegSP] = (byte)(RegPC >> 8);
+						break;
+					case 4:
+						bus[--RegSP] = (byte)RegPC;
+						RegPC = (ushort)(opY * 8);
 						opCycle = 0;
 						break;
 				}
