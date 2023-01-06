@@ -54,7 +54,7 @@ internal sealed class DMG : IDisposable
 				thisTime = Stopwatch.GetTimestamp();
 			}
 			while (thisTime - lastTime < ticksPerFrame);
-			//Console.WriteLine(Stopwatch.GetElapsedTime(lastTime).TotalMilliseconds);
+			Console.WriteLine(Stopwatch.GetElapsedTime(lastTime).TotalMilliseconds);
 			lastTime = thisTime;
 		}
 	}

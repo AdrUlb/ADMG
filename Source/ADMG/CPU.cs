@@ -254,13 +254,13 @@ internal sealed class CPU
 
 		if (opCycle == 1)
 		{
-			//	if (RegPC - 1 == 0x020B)
+			//if (RegPC - 1 == 0x020B)
 			trace = true;
 
 			if (trace)
 			{
-				Console.WriteLine($"0x{RegPC - 1:X4} 0x{op:X2} - AF:{RegAF:X4} BC:{RegBC:X4} DE:{RegDE:X4} HL:{RegHL:X4} SP:{RegSP:X4}");
-				//		Console.ReadKey(true);
+				//Console.WriteLine($"0x{RegPC - 1:X4} 0x{op:X2} - AF:{RegAF:X4} BC:{RegBC:X4} DE:{RegDE:X4} HL:{RegHL:X4} SP:{RegSP:X4}");
+				//Console.ReadKey(true);
 			}
 		}
 
@@ -585,76 +585,8 @@ internal sealed class CPU
 				return;
 		}
 
-		var value = GetReg8(Reg8Id.A);
-		
-		switch (opY)
-		{
-			case 0: // ADD A, r8
-				SetFlag(FlagId.HalfCarry, (((value & 0xF) + (readLo & 0xF)) & 0x10) == 0x10);
-				SetFlag(FlagId.Carry, value + readLo > 0xFF);
-				value += readLo;
-				SetFlag(FlagId.Zero, value == 0);
-				SetFlag(FlagId.Negative, false);
-				break;
-			case 1: // ADC A, r8
-			{
-				var carry = GetFlag(FlagId.Carry) ? (byte)1 : (byte)0;
-				SetFlag(FlagId.HalfCarry, (((value & 0xF) + (readLo & 0xF) + carry) & 0x10) == 0x10);
-				SetFlag(FlagId.Carry, value + readLo + carry > 0xFF);
-				value += readLo;
-				value += carry;
-				SetFlag(FlagId.Zero, value == 0);
-				SetFlag(FlagId.Negative, false);
-				break;
-			}
-			case 2: // SUB A, r8
-				SetFlag(FlagId.HalfCarry, (((value & 0xF) - (readLo & 0xF)) & 0x10) == 0x10);
-				SetFlag(FlagId.Carry, value - readLo < 0);
-				value -= readLo;
-				SetFlag(FlagId.Zero, value == 0);
-				SetFlag(FlagId.Negative, true);
-				break;
-			case 3: // SBC A, r8
-			{
-				var carry = GetFlag(FlagId.Carry) ? (byte)1 : (byte)0;
-				SetFlag(FlagId.HalfCarry, (((value & 0xF) - (readLo & 0xF) - carry) & 0x10) == 0x10);
-				SetFlag(FlagId.Carry, value - readLo - carry < 0);
-				value -= readLo;
-				value -= carry;
-				SetFlag(FlagId.Zero, value == 0);
-				SetFlag(FlagId.Negative, true);
-				break;
-			}
-			case 4: // AND A, r8
-				value &= readLo;
-				SetFlag(FlagId.Zero, value == 0);
-				SetFlag(FlagId.Negative, false);
-				SetFlag(FlagId.HalfCarry, true);
-				SetFlag(FlagId.Carry, false);
-				break;
-			case 5: // XOR A, r8
-				value ^= readLo;
-				SetFlag(FlagId.Zero, value == 0);
-				SetFlag(FlagId.Negative, false);
-				SetFlag(FlagId.HalfCarry, false);
-				SetFlag(FlagId.Carry, false);
-				break;
-			case 6: // OR A, r8
-				value |= readLo;
-				SetFlag(FlagId.Zero, value == 0);
-				SetFlag(FlagId.Negative, false);
-				SetFlag(FlagId.HalfCarry, false);
-				SetFlag(FlagId.Carry, false);
-				break;
-			case 7: // CP A, r8
-				SetFlag(FlagId.HalfCarry, (((value & 0xF) - (readLo & 0xF)) & 0x10) == 0x10);
-				SetFlag(FlagId.Carry, value - readLo < 0);
-				SetFlag(FlagId.Zero, value == 0);
-				SetFlag(FlagId.Negative, true);
-				break;
-		}
+		AluOperation(opY, readLo);
 
-		SetReg8(Reg8Id.A, value);
 		opCycle = 0;
 	}
 
@@ -679,6 +611,18 @@ internal sealed class CPU
 								break;
 							case 3:
 								bus[(ushort)(0xFF00 + readLo)] = GetReg8(Reg8Id.A);
+								opCycle = 0;
+								break;
+						}
+						break;
+					case 6: // LD A,(FF00+u8)
+						switch (opCycle)
+						{
+							case 2:
+								readLo = bus[RegPC++];
+								break;
+							case 3:
+								SetReg8(Reg8Id.A, bus[(ushort)(0xFF00 + readLo)]);
 								opCycle = 0;
 								break;
 						}
@@ -746,6 +690,21 @@ internal sealed class CPU
 								break;
 						}
 						break;
+					case 7: // LD A, (u16)
+						switch (opCycle)
+						{
+							case 2:
+								readLo = bus[RegPC++];
+								break;
+							case 3:
+								readHi = bus[RegPC++];
+								break;
+							case 4:
+								SetReg8(Reg8Id.A, bus[read16]);
+								opCycle = 0;
+								break;
+						}
+						break;
 					default:
 						return false;
 				}
@@ -768,6 +727,165 @@ internal sealed class CPU
 								break;
 						}
 						break;
+					case 1:
+					{
+						switch (opCycle)
+						{
+							case 2:
+								readLo = bus[RegPC++];
+								if ((Reg8Id)(readLo & 0b111) != Reg8Id.MHL)
+									goto case 3;
+								break;
+							case 3:
+								readHi = GetReg8((Reg8Id)(readLo & 0b111));
+
+								var bit = (readLo >> 3) & 0b111;
+
+								switch (readLo >> 6)
+								{
+									case 0:
+										switch (bit)
+										{
+											case 0: // RLC r8
+											{
+												var msb = readHi >> 7;
+
+												readHi <<= 1;
+												readHi |= (byte)msb;
+												
+												SetFlag(FlagId.Zero, readHi == 0);
+												SetFlag(FlagId.Negative, false);
+												SetFlag(FlagId.HalfCarry, false);
+												SetFlag(FlagId.Carry, msb == 1);
+												break;
+											}
+											case 1: // RRC r8
+											{
+												var lsb = readHi & 1;
+
+												readHi >>= 1;
+												readHi |= (byte)(lsb << 7);
+												
+												SetFlag(FlagId.Zero, readHi == 0);
+												SetFlag(FlagId.Negative, false);
+												SetFlag(FlagId.HalfCarry, false);
+												SetFlag(FlagId.Carry, lsb == 1);
+												break;
+											}
+											case 2: // RL r8
+											{
+												var msb = readHi >> 7;
+												
+												readHi <<= 1;
+												if (GetFlag(FlagId.Carry))
+													readHi |= 1;
+												
+												SetFlag(FlagId.Zero, readHi == 0);
+												SetFlag(FlagId.Negative, false);
+												SetFlag(FlagId.HalfCarry, false);
+												SetFlag(FlagId.Carry, msb == 1);
+												break;
+											}
+											case 3: // RR r8
+											{
+												var lsb = readHi & 1;
+												
+												readHi >>= 1;
+												if (GetFlag(FlagId.Carry))
+													readHi |= 1 << 7;
+												
+												SetFlag(FlagId.Zero, readHi == 0);
+												SetFlag(FlagId.Negative, false);
+												SetFlag(FlagId.HalfCarry, false);
+												SetFlag(FlagId.Carry, lsb == 1);
+												break;
+											}
+											case 4: // SLA r8
+											{
+												var msb = readHi >> 7;
+
+												readHi <<= 1;
+												
+												SetFlag(FlagId.Zero, readHi == 0);
+												SetFlag(FlagId.Negative, false);
+												SetFlag(FlagId.HalfCarry, false);
+												SetFlag(FlagId.Carry, msb == 1);
+												break;
+											}
+											case 5: // SRA r8
+											{
+												var lsb = readHi & 1;
+
+												var msb = readHi >> 7;
+												readHi >>= 1;
+												readHi |= (byte)(msb << 7);
+												
+												SetFlag(FlagId.Zero, readHi == 0);
+												SetFlag(FlagId.Negative, false);
+												SetFlag(FlagId.HalfCarry, false);
+												SetFlag(FlagId.Carry, lsb == 1);
+												break;
+											}
+											case 6: // SWAP r8
+											{
+												var hi = readHi >> 4;
+												var lo = readHi & 0x0F;
+
+												var result = (lo << 4) | hi;
+
+												readHi = (byte)result;
+												
+												SetFlag(FlagId.Zero, readHi == 0);
+												SetFlag(FlagId.Negative, false);
+												SetFlag(FlagId.HalfCarry, false);
+												SetFlag(FlagId.Carry, false);
+												break;
+											}
+											case 7: // SRL r8
+											{
+												var lsb = readHi & 1;
+
+												readHi >>= 1;
+												
+												SetFlag(FlagId.Zero, readHi == 0);
+												SetFlag(FlagId.Negative, false);
+												SetFlag(FlagId.HalfCarry, false);
+												SetFlag(FlagId.Carry, lsb == 1);
+												break;
+											}
+										}
+										break;
+									case 1: // BIT bit, r8
+									{
+										var b = (readHi >> bit) & 1;
+
+										SetFlag(FlagId.Zero, b == 0);
+										SetFlag(FlagId.Negative, false);
+										SetFlag(FlagId.HalfCarry, true);
+
+										opCycle = 0;
+										break;
+									}
+									case 2: // RES bit, r8
+										readHi &= (byte)~(1 << bit);
+										break;
+									case 3: // SET bit, r8
+										readHi |= (byte)(1 << bit);
+										break;
+								}
+
+								if ((Reg8Id)(readLo & 0b111) != Reg8Id.MHL && opCycle != 0)
+									goto case 4;
+								break;
+							case 4:
+							{
+								SetReg8((Reg8Id)(readLo & 0b111), readHi);
+								opCycle = 0;
+								break;
+							}
+						}
+						break;
+					}
 					case 6: // DI
 						// TODO: DI
 						opCycle = 0;
@@ -778,6 +896,27 @@ internal sealed class CPU
 						break;
 					default:
 						return false;
+				}
+				break;
+			case 4: // CALL u16
+				switch (opCycle)
+				{
+					case 2:
+						readLo = bus[RegPC++];
+						break;
+					case 3:
+						readHi = bus[RegPC++];
+						if (!GetCondition((ConditionId)opY))
+							opCycle = 0;
+						break;
+					case 5:
+						bus[--RegSP] = (byte)(RegPC >> 8);
+						break;
+					case 6:
+						bus[--RegSP] = (byte)RegPC;
+						RegPC = read16;
+						opCycle = 0;
+						break;
 				}
 				break;
 			case 5:
@@ -796,9 +935,9 @@ internal sealed class CPU
 						}
 						break;
 					case 1:
-						if (opP != 0) // Invalid instruction, hang
+						if (opP != 0) // Invalid instructions, hang
 							return true;
-						
+
 						// CALL u16
 						switch (opCycle)
 						{
@@ -822,10 +961,96 @@ internal sealed class CPU
 						return false;
 				}
 				break;
+			case 6:
+				switch (opCycle)
+				{
+					case 1:
+						readLo = bus[RegPC++];
+						break;
+					case 2:
+						AluOperation(opY, readLo);
+						opCycle = 0;
+						break;
+				}
+				break;
 			default:
 				return false;
 		}
 
 		return true;
+	}
+
+	private void AluOperation(int id, byte value)
+	{
+		var regA = GetReg8(Reg8Id.A);
+
+		switch (id)
+		{
+			case 0: // ADD A, r8
+				SetFlag(FlagId.HalfCarry, (((regA & 0xF) + (value & 0xF)) & 0x10) == 0x10);
+				SetFlag(FlagId.Carry, regA + value > 0xFF);
+				regA += value;
+				SetFlag(FlagId.Zero, regA == 0);
+				SetFlag(FlagId.Negative, false);
+				break;
+			case 1: // ADC A, r8
+			{
+				var carry = GetFlag(FlagId.Carry) ? (byte)1 : (byte)0;
+				SetFlag(FlagId.HalfCarry, (((regA & 0xF) + (value & 0xF) + carry) & 0x10) == 0x10);
+				SetFlag(FlagId.Carry, regA + value + carry > 0xFF);
+				regA += value;
+				regA += carry;
+				SetFlag(FlagId.Zero, regA == 0);
+				SetFlag(FlagId.Negative, false);
+				break;
+			}
+			case 2: // SUB A, r8
+				SetFlag(FlagId.HalfCarry, (((regA & 0xF) - (value & 0xF)) & 0x10) == 0x10);
+				SetFlag(FlagId.Carry, regA - value < 0);
+				regA -= value;
+				SetFlag(FlagId.Zero, regA == 0);
+				SetFlag(FlagId.Negative, true);
+				break;
+			case 3: // SBC A, r8
+			{
+				var carry = GetFlag(FlagId.Carry) ? (byte)1 : (byte)0;
+				SetFlag(FlagId.HalfCarry, (((regA & 0xF) - (value & 0xF) - carry) & 0x10) == 0x10);
+				SetFlag(FlagId.Carry, regA - value - carry < 0);
+				regA -= value;
+				regA -= carry;
+				SetFlag(FlagId.Zero, regA == 0);
+				SetFlag(FlagId.Negative, true);
+				break;
+			}
+			case 4: // AND A, r8
+				regA &= value;
+				SetFlag(FlagId.Zero, regA == 0);
+				SetFlag(FlagId.Negative, false);
+				SetFlag(FlagId.HalfCarry, true);
+				SetFlag(FlagId.Carry, false);
+				break;
+			case 5: // XOR A, r8
+				regA ^= value;
+				SetFlag(FlagId.Zero, regA == 0);
+				SetFlag(FlagId.Negative, false);
+				SetFlag(FlagId.HalfCarry, false);
+				SetFlag(FlagId.Carry, false);
+				break;
+			case 6: // OR A, r8
+				regA |= value;
+				SetFlag(FlagId.Zero, regA == 0);
+				SetFlag(FlagId.Negative, false);
+				SetFlag(FlagId.HalfCarry, false);
+				SetFlag(FlagId.Carry, false);
+				break;
+			case 7: // CP A, r8
+				SetFlag(FlagId.HalfCarry, (((regA & 0xF) - (value & 0xF)) & 0x10) == 0x10);
+				SetFlag(FlagId.Carry, regA - value < 0);
+				SetFlag(FlagId.Zero, regA == 0);
+				SetFlag(FlagId.Negative, true);
+				break;
+		}
+
+		SetReg8(Reg8Id.A, regA);
 	}
 }
