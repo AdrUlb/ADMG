@@ -138,7 +138,7 @@ internal sealed class CPU
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private static Reg8Id GetR16HiId(Reg16Id id) => id switch
+	private static Reg8Id GetReg16HiId(Reg16Id id) => id switch
 	{
 		Reg16Id.BC => Reg8Id.B,
 		Reg16Id.DE => Reg8Id.D,
@@ -148,7 +148,7 @@ internal sealed class CPU
 	};
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private static Reg8Id GetR16LoId(Reg16Id id) => id switch
+	private static Reg8Id GetReg16LoId(Reg16Id id) => id switch
 	{
 		Reg16Id.BC => Reg8Id.C,
 		Reg16Id.DE => Reg8Id.E,
@@ -158,7 +158,7 @@ internal sealed class CPU
 	};
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private Reg8Id GetR16AFHiId(Reg16Id id) => id switch
+	private Reg8Id GetReg16AFHiId(Reg16Id id) => id switch
 	{
 		Reg16Id.BC => Reg8Id.B,
 		Reg16Id.DE => Reg8Id.D,
@@ -168,7 +168,7 @@ internal sealed class CPU
 	};
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private Reg8Id GetR16AFLoId(Reg16Id id) => id switch
+	private Reg8Id GetReg16AFLoId(Reg16Id id) => id switch
 	{
 		Reg16Id.BC => Reg8Id.C,
 		Reg16Id.DE => Reg8Id.E,
@@ -180,10 +180,10 @@ internal sealed class CPU
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private bool GetCondition(ConditionId id) => id switch
 	{
-		ConditionId.NotZero => (RegAF & (1 << 7)) == 0,
-		ConditionId.Zero => (RegAF & (1 << 7)) != 0,
-		ConditionId.NotCarry => (RegAF & (1 << 4)) == 0,
-		ConditionId.Carry => (RegAF & (1 << 4)) != 0,
+		ConditionId.NotZero => !GetFlag(FlagId.Zero),
+		ConditionId.Zero => GetFlag(FlagId.Zero),
+		ConditionId.NotCarry => !GetFlag(FlagId.Carry),
+		ConditionId.Carry => GetFlag(FlagId.Carry),
 		_ => throw new UnreachableException()
 	};
 
@@ -275,8 +275,7 @@ internal sealed class CPU
 					goto default;
 				break;
 			case 2:
-				if (!CycleX2())
-					goto default;
+				CycleX2();
 				break;
 			case 3:
 				if (!CycleX3())
@@ -329,10 +328,10 @@ internal sealed class CPU
 						switch (opCycle)
 						{
 							case 2:
-								SetReg8(GetR16LoId((Reg16Id)opP), bus[RegPC++]);
+								SetReg8(GetReg16LoId((Reg16Id)opP), bus[RegPC++]);
 								break;
 							case 3:
-								SetReg8(GetR16HiId((Reg16Id)opP), bus[RegPC++]);
+								SetReg8(GetReg16HiId((Reg16Id)opP), bus[RegPC++]);
 								opCycle = 0;
 								break;
 						}
@@ -416,6 +415,67 @@ internal sealed class CPU
 						break;
 					default:
 						return false;
+				}
+				break;
+			case 3:
+				switch (opQ)
+				{
+					case 0: // INC r16
+						switch (opCycle)
+						{
+							case 1:
+							{
+								var id = GetReg16LoId((Reg16Id)opP);
+								readHi = GetReg8(id);
+								// Skip over the operation that would increase the high byte if there was no overflow
+								if (readHi + 1 <= 0xFF)
+									opCycle++;
+								readHi++;
+								SetReg8(id, readHi);
+								break;
+							}
+							case 2:
+							{
+								var id = GetReg16HiId((Reg16Id)opP);
+								readHi = GetReg8(id);
+								readHi++;
+								SetReg8(id, readHi);
+								opCycle = 0;
+								break;
+							}
+							case 3:
+								opCycle = 0;
+								break;
+						}
+						break;
+					case 1: // DEC r16
+						switch (opCycle)
+						{
+							case 1:
+							{
+								var id = GetReg16LoId((Reg16Id)opP);
+								readHi = GetReg8(id);
+								// Skip over the operation that would increase the high byte if there was no overflow
+								if (readHi - 1 >= 0)
+									opCycle++;
+								readHi--;
+								SetReg8(id, readHi);
+								break;
+							}
+							case 2:
+							{
+								var id = GetReg16HiId((Reg16Id)opP);
+								readHi = GetReg8(id);
+								readHi--;
+								SetReg8(id, readHi);
+								opCycle = 0;
+								break;
+							}
+							case 3:
+								opCycle = 0;
+								break;
+						}
+						break;
 				}
 				break;
 			case 4: // INC r8
@@ -513,9 +573,89 @@ internal sealed class CPU
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private bool CycleX2()
+	private void CycleX2()
 	{
-		return false;
+		var opY = (op >> 3) & 0b111;
+		var opZ = op & 0b111;
+
+		if (opCycle == 0)
+		{
+			readLo = GetReg8((Reg8Id)opZ);
+			if ((Reg8Id)opZ == Reg8Id.MHL)
+				return;
+		}
+
+		var value = GetReg8(Reg8Id.A);
+		
+		switch (opY)
+		{
+			case 0: // ADD A, r8
+				SetFlag(FlagId.HalfCarry, (((value & 0xF) + (readLo & 0xF)) & 0x10) == 0x10);
+				SetFlag(FlagId.Carry, value + readLo > 0xFF);
+				value += readLo;
+				SetFlag(FlagId.Zero, value == 0);
+				SetFlag(FlagId.Negative, false);
+				break;
+			case 1: // ADC A, r8
+			{
+				var carry = GetFlag(FlagId.Carry) ? (byte)1 : (byte)0;
+				SetFlag(FlagId.HalfCarry, (((value & 0xF) + (readLo & 0xF) + carry) & 0x10) == 0x10);
+				SetFlag(FlagId.Carry, value + readLo + carry > 0xFF);
+				value += readLo;
+				value += carry;
+				SetFlag(FlagId.Zero, value == 0);
+				SetFlag(FlagId.Negative, false);
+				break;
+			}
+			case 2: // SUB A, r8
+				SetFlag(FlagId.HalfCarry, (((value & 0xF) - (readLo & 0xF)) & 0x10) == 0x10);
+				SetFlag(FlagId.Carry, value - readLo < 0);
+				value -= readLo;
+				SetFlag(FlagId.Zero, value == 0);
+				SetFlag(FlagId.Negative, true);
+				break;
+			case 3: // SBC A, r8
+			{
+				var carry = GetFlag(FlagId.Carry) ? (byte)1 : (byte)0;
+				SetFlag(FlagId.HalfCarry, (((value & 0xF) - (readLo & 0xF) - carry) & 0x10) == 0x10);
+				SetFlag(FlagId.Carry, value - readLo - carry < 0);
+				value -= readLo;
+				value -= carry;
+				SetFlag(FlagId.Zero, value == 0);
+				SetFlag(FlagId.Negative, true);
+				break;
+			}
+			case 4: // AND A, r8
+				value &= readLo;
+				SetFlag(FlagId.Zero, value == 0);
+				SetFlag(FlagId.Negative, false);
+				SetFlag(FlagId.HalfCarry, true);
+				SetFlag(FlagId.Carry, false);
+				break;
+			case 5: // XOR A, r8
+				value ^= readLo;
+				SetFlag(FlagId.Zero, value == 0);
+				SetFlag(FlagId.Negative, false);
+				SetFlag(FlagId.HalfCarry, false);
+				SetFlag(FlagId.Carry, false);
+				break;
+			case 6: // OR A, r8
+				value |= readLo;
+				SetFlag(FlagId.Zero, value == 0);
+				SetFlag(FlagId.Negative, false);
+				SetFlag(FlagId.HalfCarry, false);
+				SetFlag(FlagId.Carry, false);
+				break;
+			case 7: // CP A, r8
+				SetFlag(FlagId.HalfCarry, (((value & 0xF) - (readLo & 0xF)) & 0x10) == 0x10);
+				SetFlag(FlagId.Carry, value - readLo < 0);
+				SetFlag(FlagId.Zero, value == 0);
+				SetFlag(FlagId.Negative, true);
+				break;
+		}
+
+		SetReg8(Reg8Id.A, value);
+		opCycle = 0;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -550,6 +690,18 @@ internal sealed class CPU
 			case 1:
 				switch (opQ)
 				{
+					case 0: // POP r16
+						switch (opCycle)
+						{
+							case 2:
+								SetReg8(GetReg16AFLoId((Reg16Id)opP), bus[RegSP++]);
+								break;
+							case 3:
+								SetReg8(GetReg16AFHiId((Reg16Id)opP), bus[RegSP++]);
+								opCycle = 0;
+								break;
+						}
+						break;
 					case 1:
 						switch (opP)
 						{
@@ -631,6 +783,18 @@ internal sealed class CPU
 			case 5:
 				switch (opQ)
 				{
+					case 0: // PUSH r16
+						switch (opCycle)
+						{
+							case 3:
+								bus[--RegSP] = GetReg8(GetReg16AFHiId((Reg16Id)opP));
+								break;
+							case 4:
+								bus[--RegSP] = GetReg8(GetReg16AFLoId((Reg16Id)opP));
+								opCycle = 0;
+								break;
+						}
+						break;
 					case 1:
 						if (opP != 0) // Invalid instruction, hang
 							return true;
