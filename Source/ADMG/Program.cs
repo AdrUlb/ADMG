@@ -1,0 +1,19 @@
+﻿using ASFW;
+using ASFW.Extension.Text;
+using ASFW.Platform.Desktop;
+
+namespace ADMG;
+
+internal static class Program
+{
+	private static void Main()
+	{
+		Asfw.EnableExtension<TextAsfwExtension>();
+		Asfw.Init<DesktopASFWPlatform>();
+
+		using (var dmg = new DMG())
+			dmg.Start();
+
+		Asfw.Quit();
+	}
+}
