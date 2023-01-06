@@ -49,12 +49,12 @@ internal sealed class DMG : IDisposable
 
 			long thisTime;
 
+			//Console.WriteLine(Stopwatch.GetElapsedTime(lastTime).TotalMilliseconds);
 			do
 			{
 				thisTime = Stopwatch.GetTimestamp();
 			}
 			while (thisTime - lastTime < ticksPerFrame);
-			//Console.WriteLine(Stopwatch.GetElapsedTime(lastTime).TotalMilliseconds);
 			lastTime = thisTime;
 		}
 	}

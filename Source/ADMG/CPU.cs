@@ -142,6 +142,16 @@ internal sealed class CPU
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private ushort GetReg16(Reg16Id id) => id switch
+	{
+		Reg16Id.BC => RegBC,
+		Reg16Id.DE => RegDE,
+		Reg16Id.HL => RegHL,
+		Reg16Id.SP => RegSP,
+		_ => throw new UnreachableException()
+	};
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static Reg8Id GetReg16HiId(Reg16Id id) => id switch
 	{
 		Reg16Id.BC => Reg8Id.B,
@@ -247,9 +257,7 @@ internal sealed class CPU
 	public void Cycle()
 	{
 		if (opCycle == 0)
-		{
 			log.WriteLine($"A:{GetReg8(Reg8Id.A):X2} F:{GetReg8(Reg8Id.F):X2} B:{GetReg8(Reg8Id.B):X2} C:{GetReg8(Reg8Id.C):X2} D:{GetReg8(Reg8Id.D):X2} E:{GetReg8(Reg8Id.E):X2} H:{GetReg8(Reg8Id.H):X2} L:{GetReg8(Reg8Id.L):X2} SP:{GetReg8(Reg8Id.SPHi):X2}{GetReg8(Reg8Id.SPLo):X2} PC:{RegPC:X4} PCMEM:{bus[RegPC]:X2},{bus[(ushort)(RegPC + 1)]:X2},{bus[(ushort)(RegPC + 2)]:X2},{bus[(ushort)(RegPC + 3)]:X2}");
-		}
 		
 		if (opCycle++ == 0)
 			op = bus[RegPC++];
@@ -261,17 +269,17 @@ internal sealed class CPU
 		var opP = opY >> 1;
 		var opQ = opY & 1;
 
-		/*if (opCycle == 1)
+		if (opCycle == 1)
 		{
-			if (RegPC - 1 == 0xD801)
+			//if (RegPC - 1 == 0xD801)
 				trace = true;
 
 			if (trace)
 			{
-				Console.WriteLine($"0x{RegPC - 1:X4} 0x{op:X2} - AF:{RegAF:X4} BC:{RegBC:X4} DE:{RegDE:X4} HL:{RegHL:X4} SP:{RegSP:X4}");
-				Console.ReadKey(true);
+				//Console.WriteLine($"0x{RegPC - 1:X4} 0x{op:X2} - AF:{RegAF:X4} BC:{RegBC:X4} DE:{RegDE:X4} HL:{RegHL:X4} SP:{RegSP:X4}");
+				//Console.ReadKey(true);
 			}
-		}*/
+		}
 
 		switch (opX)
 		{
@@ -290,7 +298,7 @@ internal sealed class CPU
 					goto default;
 				break;
 			default:
-				throw new NotImplementedException($"Instruction not implemented: 0x{op:X2} (x:{opX},y:{opY},z:{opZ},p:{opP},q:{opQ}) - 0x{RegPC - 1:X4} 0x{op:X2} - AF:{RegAF:X4} BC:{RegBC:X4} DE:{RegDE:X4} HL:{RegHL:X4} SP:{RegSP:X4}.");
+				throw new NotImplementedException($"Instruction not implemented: 0x{op:X2} (x:{opX},y:{opY},z:{opZ},p:{opP},q:{opQ}) - PC:{RegPC - 1:X4} AF:{RegAF:X4} BC:{RegBC:X4} DE:{RegDE:X4} HL:{RegHL:X4} SP:{RegSP:X4}.");
 		}
 	}
 
@@ -309,6 +317,24 @@ internal sealed class CPU
 				{
 					case 0: // NOP
 						opCycle = 0;
+						break;
+					case 1: // LD (u16), SP
+						switch (opCycle)
+						{
+							case 2:
+								readLo = bus[RegPC++];
+								break;
+							case 3:
+								readHi = bus[RegPC++];
+								break;
+							case 4:
+								bus[read16] = GetReg8(Reg8Id.SPLo);
+								break;
+							case 5:
+								bus[(ushort)(read16 + 1)] = GetReg8(Reg8Id.SPHi);
+								opCycle = 0;
+								break;
+						}
 						break;
 					case >= 3 and <= 7: // JR flag, i8
 						switch (opCycle)
@@ -342,6 +368,26 @@ internal sealed class CPU
 								SetReg8(GetReg16HiId((Reg16Id)opP), bus[RegPC++]);
 								opCycle = 0;
 								break;
+						}
+						break;
+					case 1: // ADD HL, r16
+						switch (opCycle)
+						{
+							case 1:
+							{
+								var r16 = GetReg16((Reg16Id)opP);
+								
+								SetFlag(FlagId.HalfCarry, (((RegHL & 0b111111111111) + (r16 & 0b111111111111)) & (1 << 12)) == (1 << 12));
+								SetFlag(FlagId.Carry, RegHL + r16 > 0xFFFF);	
+								RegHL += r16;
+								SetFlag(FlagId.Negative, false);
+								break;
+							}
+							case 2:
+							{
+								opCycle = 0;
+								break;
+							}
 						}
 						break;
 					default:
@@ -685,6 +731,24 @@ internal sealed class CPU
 								break;
 						}
 						break;
+					case 5: // ADD SP, i8
+						switch (opCycle)
+						{
+							case 2:
+								readLo = bus[RegPC++];
+								break;
+							case 3:
+								SetFlag(FlagId.HalfCarry, (((RegSP & 0xF) + (readLo & 0xF)) & 0x10) == 0x10);
+								SetFlag(FlagId.Carry, (byte)RegSP + readLo > 0xFF);
+								RegSP = (ushort)(RegSP + (sbyte)readLo);
+								SetFlag(FlagId.Zero, false);
+								SetFlag(FlagId.Negative, false);
+								break;
+							case 4:
+								opCycle = 0;
+								break;
+						}
+						break;
 					case 6: // LD A,(FF00+u8)
 						switch (opCycle)
 						{
@@ -697,6 +761,24 @@ internal sealed class CPU
 								break;
 						}
 						break;
+					case 7: // LD HL, SP + i8
+					{
+						switch (opCycle)
+						{
+							case 2:
+								readLo = bus[RegPC++];
+								RegHL = (ushort)(RegSP + (sbyte)readLo);
+								SetFlag(FlagId.Zero, false);
+								SetFlag(FlagId.Negative, false);
+								SetFlag(FlagId.HalfCarry, (((RegSP & 0xF) + (readLo & 0xF)) & 0x10) == 0x10);
+								SetFlag(FlagId.Carry, (byte)RegSP + readLo > 0xFF);
+								break;
+							case 3:
+								opCycle = 0;
+								break;
+						}
+						break;
+					}
 					default:
 						return false;
 				}
@@ -732,6 +814,17 @@ internal sealed class CPU
 										RegPC = read16;
 										opCycle = 0;
 										break;
+								}
+								break;
+							case 2: // JP HL
+								RegPC = RegHL;
+								opCycle = 0;
+								break;
+							case 3: // LD SP, HL
+								if (opCycle == 2)
+								{
+									RegSP = RegHL;
+									opCycle = 0;
 								}
 								break;
 							default:
