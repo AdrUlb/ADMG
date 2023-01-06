@@ -39,6 +39,10 @@ internal sealed class Bus
 				case 0xFF40:
 					dmg.Ppu.LcdControl = value;
 					break;
+				case 0xFF46:
+					for (var i = 0; i < 0x100; i++) // Hack: Instant OAM DMA transfer
+						this[(ushort)(0xFE00 + i)] = this[(ushort)((value << 8) + i)];
+					break;
 				case 0xFFFF:
 					dmg.InterruptController.Enabled = value;
 					break;

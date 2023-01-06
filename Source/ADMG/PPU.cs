@@ -22,6 +22,7 @@ internal sealed class PPU
 
 	private const int bitControlBgTilemap = 3;
 	private const int bitControlTiledata = 4;
+	
 	public bool ControlBgTilemap = false;
 	public bool ControlTiledata = false;
 	
@@ -177,6 +178,48 @@ internal sealed class PPU
 				}
 			}
 		}
+
+		for (var i = 0; i < 40; i++)
+		{
+			var y = dmg.Bus[(ushort)(0xFE00 + i * 4)] - 16;
+			var x = dmg.Bus[(ushort)(0xFE00 + i * 4 + 1)] - 8;
+			var tileIndex = dmg.Bus[(ushort)(0xFE00 + i * 4 + 2)];
+			var tileOffset = tileIndex * 16;
+			
+			for (var tileRow = 0; tileRow < 8; tileRow++)
+			{
+				var yy = y + tileRow;
+				if (yy < 0)
+					continue;
+				if (yy >= 144)
+					break;
+					
+				var rowOffset = tileRow * 2;
+
+				var rowByte1 = dmg.Bus[(ushort)(0x8000 + tileOffset + rowOffset)];
+				var rowByte2 = dmg.Bus[(ushort)(0x8000 + tileOffset + rowOffset + 1)];
+
+				for (var tileCol = 0; tileCol < 8; tileCol++)
+				{
+					var xx = x + tileCol;
+					if (yy < 0)
+						continue;
+					if (xx >= 160)
+						break;
+						
+					var bit1 = (rowByte1 >> (7 - tileCol)) & 1;
+					var bit2 = (rowByte2 >> (7 - tileCol)) & 1;
+					var pix = (bit2 << 1) | bit1;
+
+					if (pix == 0)
+						continue;
+					
+					var color = DMG.Palette[pix];
+					dmg.Display[xx, yy] = color;
+				}
+			}
+		}
+		
 		dmg.Display.Commit();
 	}
 }
