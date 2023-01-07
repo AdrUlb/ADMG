@@ -58,6 +58,7 @@ internal sealed class Cartridge
 
 		mbc = mbcId switch
 		{
+			MbcId.None => new MbcNone(data),
 			MbcId.Mbc1 => new Mbc1(data),
 			MbcId.Mbc3 => new Mbc3(data),
 			_ => throw new UnreachableException()

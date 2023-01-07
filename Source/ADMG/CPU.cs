@@ -39,12 +39,12 @@ internal sealed class CPU
 
 		this.bus = bus;
 		this.interruptController = interruptController;
-		RegBC = 0x0013;
+		/*RegBC = 0x0013;
 		RegDE = 0x00D8;
 		RegHL = 0x014D;
 		RegAF = 0x01B0;
 		RegSP = 0xFFFE;
-		RegPC = 0x0100;
+		RegPC = 0x0100;*/
 	}
 
 	private enum Reg16Id
@@ -1255,7 +1255,9 @@ internal sealed class CPU
 						return false;
 				}
 				break;
-			case 4: // CALL u16
+			case 4: // CALL cond, u16
+				if (opY >= 4) // Invalid opcode
+					break;
 				switch (opCycle)
 				{
 					case 2:
@@ -1350,6 +1352,7 @@ internal sealed class CPU
 		return true;
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private void AluOperation(int id, byte value)
 	{
 		var regA = GetReg8(Reg8Id.A);
