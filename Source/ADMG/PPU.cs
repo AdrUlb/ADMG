@@ -202,7 +202,7 @@ internal sealed class PPU
 				for (var tileCol = 0; tileCol < 8; tileCol++)
 				{
 					var xx = x + tileCol;
-					if (yy < 0)
+					if (xx < 0)
 						continue;
 					if (xx >= 160)
 						break;
