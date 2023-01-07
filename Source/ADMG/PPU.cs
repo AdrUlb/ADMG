@@ -32,6 +32,8 @@ internal sealed class PPU
 
 	public byte ScrollX;
 	public byte ScrollY;
+	public byte WindowX;
+	public byte WindowY;
 	
 	public readonly int[] BackgroundPalette = { 0, 1, 2, 3 };
 	public readonly int[] ObjectPalette0 = { 0, 1, 2, 3 };
@@ -39,6 +41,8 @@ internal sealed class PPU
 	
 	private const int bitControlBgTilemap = 3;
 	private const int bitControlTiledata = 4;
+	private const int bitControlWindowEnable = 5;
+	private const int bitControlWindowTilemap = 6;
 	private const int bitControlEnable = 7;
 
 	private const int bitsStatusMode = 0;
@@ -50,6 +54,8 @@ internal sealed class PPU
 
 	public bool ControlBgTilemap = false;
 	public bool ControlTiledata = false;
+	public bool ControlWindowEnable = false;
+	public bool ControlWindowTilemap = false;
 	public bool ControlEnable = true;
 
 	public bool StatusLcdYCompareInterrupt = false;
@@ -59,6 +65,11 @@ internal sealed class PPU
 	public bool StatusLcdYCompare = false;
 	public PpuMode StatusMode = PpuMode.OamScan;
 
+	private readonly int[] selectedObjs = new int[10];
+	private int selectedObjsCount = 0;
+	private bool windowConditionY = false;
+	private bool windowActive = false;
+	
 	public byte BackgroundPaletteByte
 	{
 		get => (byte)((BackgroundPalette[0] & 0b11) | ((BackgroundPalette[1] & 0b11) << 2) | ((BackgroundPalette[2] & 0b11) << 4) | ((BackgroundPalette[3] & 0b11) << 6));
@@ -110,6 +121,12 @@ internal sealed class PPU
 			if (ControlTiledata)
 				value |= 1 << bitControlTiledata;
 
+			if (ControlWindowEnable)
+				value |= 1 << bitControlWindowEnable;
+
+			if (ControlWindowTilemap)
+				value |= 1 << bitControlWindowTilemap;
+
 			if (ControlEnable)
 				value |= 1 << bitControlEnable;
 
@@ -120,6 +137,8 @@ internal sealed class PPU
 		{
 			ControlBgTilemap = (value & (1 << bitControlBgTilemap)) != 0;
 			ControlTiledata = (value & (1 << bitControlTiledata)) != 0;
+			ControlWindowEnable = (value & (1 << bitControlWindowEnable)) != 0;
+			ControlWindowTilemap = (value & (1 << bitControlWindowTilemap)) != 0;
 			ControlEnable = (value & (1 << bitControlEnable)) != 0;
 		}
 	}
@@ -192,12 +211,30 @@ internal sealed class PPU
 	private void ModeOamScan()
 	{
 		if (dot % 456 == 80)
+		{
+			selectedObjsCount = 0;
+			
+			for (var i = 0; i < 40; i++)
+			{
+				var y = dmg.Bus[(ushort)(0xFE00 + i * 4)] - 16;
+
+				if (y > LcdY || y + 8 <= LcdY)
+					continue;
+
+				selectedObjs[selectedObjsCount] = i;
+				selectedObjsCount++;
+				if (selectedObjsCount == 10)
+					break;
+			}
+
 			StatusMode = PpuMode.Draw;
+		}
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private void ModeDraw()
 	{
+		DrawLine();
 		StatusMode = PpuMode.HBlank;
 		if (StatusMode0Interrupt)
 			dmg.InterruptController.RequestLcdStat = true;
@@ -209,7 +246,7 @@ internal sealed class PPU
 		if (dot % 456 == 0)
 		{
 			LcdY++;
-
+			windowConditionY = LcdY == WindowY;
 			if (LcdY == 144)
 			{
 				DisplayFrame();
@@ -220,7 +257,6 @@ internal sealed class PPU
 			}
 			else
 			{
-				DrawLine();
 				StatusMode = PpuMode.OamScan;
 				if (StatusMode2Interrupt)
 					dmg.InterruptController.RequestLcdStat = true;
@@ -238,6 +274,7 @@ internal sealed class PPU
 		{
 			dot = 0;
 			LcdY = 0;
+			windowActive = false;
 			StatusMode = PpuMode.OamScan;
 			if (StatusMode2Interrupt)
 				dmg.InterruptController.RequestLcdStat = true;
@@ -246,41 +283,31 @@ internal sealed class PPU
 
 	private void DrawLine()
 	{
-		var tilemap = ControlBgTilemap ? 0x9C00 : 0x9800;
+		var bgTilemap = ControlBgTilemap ? 0x9C00 : 0x9800;
+		var winTilemap = ControlWindowTilemap ? 0x9C00 : 0x9800;
+		var tilemap = windowActive ? winTilemap : bgTilemap;
 		var tiledata = ControlTiledata ? 0x8000 : 0x9000;
-
-		var yy = LcdY + ScrollY;
-
-		Span<int> selectedSprites = stackalloc int[10];
-
-		var selectedSpriteCount = 0;
-
-		for (var i = 0; i < 40; i++)
-		{
-			var y = dmg.Bus[(ushort)(0xFE00 + i * 4)] - 16;
-
-			if (y > LcdY || y + 8 <= LcdY)
-				continue;
-
-			selectedSprites[selectedSpriteCount] = i;
-			selectedSpriteCount++;
-			if (selectedSpriteCount == 10)
-				break;
-		}
 
 		for (var x = 0; x < 160; x++)
 		{
-			var sprite = false;
+			if (windowConditionY && x == WindowX - 7 && ControlWindowEnable)
+			{
+				windowActive = true;
+				tilemap = winTilemap;
+			}
+
+			var hasObj = false;
 
 			var pixel = 0;
 			var palette = BackgroundPalette;
 			
 			var prevObj = -1;
 			var bgOverObj = false;
-			
-			foreach (var i in selectedSprites[..selectedSpriteCount])
+
+			for (var oamI = 0; oamI < selectedObjsCount; oamI++)
 			{
-				var spriteX = dmg.Bus[(ushort)(0xFE00 + i * 4 + 1)] - 8;
+				var obj = selectedObjs[oamI];
+				var spriteX = dmg.Bus[(ushort)(0xFE00 + obj * 4 + 1)] - 8;
 
 				if (spriteX > x || spriteX + 8 <= x)
 					continue;
@@ -292,9 +319,9 @@ internal sealed class PPU
 						continue;
 				}
 
-				var spriteY = dmg.Bus[(ushort)(0xFE00 + i * 4)] - 16;
-				var tileIndex = dmg.Bus[(ushort)(0xFE00 + i * 4 + 2)];
-				var attribs = dmg.Bus[(ushort)(0xFE00 + i * 4 + 3)];
+				var spriteY = dmg.Bus[(ushort)(0xFE00 + obj * 4)] - 16;
+				var tileIndex = dmg.Bus[(ushort)(0xFE00 + obj * 4 + 2)];
+				var attribs = dmg.Bus[(ushort)(0xFE00 + obj * 4 + 3)];
 
 				var xFlip = (attribs & (1 << 5)) != 0;
 				var yFlip = (attribs & (1 << 6)) != 0;
@@ -319,18 +346,20 @@ internal sealed class PPU
 				var bit1 = (rowByte1 >> (7 - tileCol)) & 1;
 				var bit2 = (rowByte2 >> (7 - tileCol)) & 1;
 				pixel = (bit2 << 1) | bit1;
-				palette = objPalette ? ObjectPalette1 : ObjectPalette0; 
+				palette = objPalette ? ObjectPalette1 : ObjectPalette0;
 
 				if (pixel == 0)
 					continue;
 
-				sprite = true;
-				prevObj = i;
+				hasObj = true;
+				prevObj = obj;
 			}
 
-			if (!sprite || bgOverObj)
+			if (!hasObj || bgOverObj)
 			{
-				var xx = x + ScrollX;
+				var xx = windowActive ? x - WindowX : x + ScrollX;
+				var yy = windowActive ? LcdY - WindowY : LcdY + ScrollY;
+
 				var tilemapIndex = yy / 8 % 32 * 32 + xx / 8 % 32;
 				var tileIndex = dmg.Bus[(ushort)(tilemap + tilemapIndex)];
 				var tileOffset = ControlTiledata ? tileIndex * 16 : (sbyte)tileIndex * 16;
@@ -347,7 +376,7 @@ internal sealed class PPU
 
 				var bgPixel = (bit2 << 1) | bit1;
 
-				if (!sprite || (bgOverObj && bgPixel != 0))
+				if (!hasObj || (bgOverObj && bgPixel != 0))
 				{
 					pixel = bgPixel;
 					palette = BackgroundPalette;

@@ -38,6 +38,8 @@ internal sealed class Bus
 			0xFF47 => dmg.Ppu.BackgroundPaletteByte,
 			0xFF48 => dmg.Ppu.ObjectPalette0Byte,
 			0xFF49 => dmg.Ppu.ObjectPalette1Byte,
+			0xFF4A => dmg.Ppu.WindowY,
+			0xFF4B => dmg.Ppu.WindowX,
 			0xFFFF => dmg.InterruptController.Enabled,
 			_ => temp[address]
 		};
@@ -94,6 +96,12 @@ internal sealed class Bus
 					break;
 				case 0xFF49:
 					dmg.Ppu.ObjectPalette1Byte = value;
+					break;
+				case 0xFF4A:
+					dmg.Ppu.WindowY = value;
+					break;
+				case 0xFF4B:
+					dmg.Ppu.WindowX = value;
 					break;
 				case 0xFF50:
 					disbaleBootrom = value;
