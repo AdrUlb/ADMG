@@ -34,6 +34,8 @@ internal sealed class PPU
 	public byte ScrollY;
 	public byte WindowX;
 	public byte WindowY;
+	public byte WindowOffX;
+	public byte WindowOffY;
 	
 	public readonly int[] BackgroundPalette = { 0, 1, 2, 3 };
 	public readonly int[] ObjectPalette0 = { 0, 1, 2, 3 };
@@ -234,10 +236,13 @@ internal sealed class PPU
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private void ModeDraw()
 	{
-		DrawLine();
-		StatusMode = PpuMode.HBlank;
-		if (StatusMode0Interrupt)
-			dmg.InterruptController.RequestLcdStat = true;
+		if (dot % 456 == 80 + 172)
+		{
+			DrawLine();
+			StatusMode = PpuMode.HBlank;
+			if (StatusMode0Interrupt)
+				dmg.InterruptController.RequestLcdStat = true;
+		}
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -274,6 +279,7 @@ internal sealed class PPU
 		{
 			dot = 0;
 			LcdY = 0;
+			WindowOffY = 0;
 			windowActive = false;
 			StatusMode = PpuMode.OamScan;
 			if (StatusMode2Interrupt)
@@ -288,9 +294,11 @@ internal sealed class PPU
 		var tilemap = windowActive ? winTilemap : bgTilemap;
 		var tiledata = ControlTiledata ? 0x8000 : 0x9000;
 
+		WindowOffX = 0;
+		
 		for (var x = 0; x < 160; x++)
 		{
-			if (windowConditionY && x == WindowX - 7 && ControlWindowEnable)
+			if (!windowActive && windowConditionY && x == WindowX - 7 && ControlWindowEnable)
 			{
 				windowActive = true;
 				tilemap = winTilemap;
@@ -357,8 +365,8 @@ internal sealed class PPU
 
 			if (!hasObj || bgOverObj)
 			{
-				var xx = windowActive ? x - WindowX : x + ScrollX;
-				var yy = windowActive ? LcdY - WindowY : LcdY + ScrollY;
+				var xx = windowActive ? WindowOffX : x + ScrollX;
+				var yy = windowActive ? WindowOffY : LcdY + ScrollY;
 
 				var tilemapIndex = yy / 8 % 32 * 32 + xx / 8 % 32;
 				var tileIndex = dmg.Bus[(ushort)(tilemap + tilemapIndex)];
@@ -385,9 +393,14 @@ internal sealed class PPU
 
 			var color = DMG.Colors[palette[pixel]];
 			dmg.Display[x, LcdY] = color;
-		}
-	}
 
+			if (windowActive)
+				WindowOffX++;
+		}
+		
+		if (windowActive)
+			WindowOffY++;
+	}
 
 	private void DisplayFrame()
 	{

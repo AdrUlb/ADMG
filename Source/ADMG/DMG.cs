@@ -23,19 +23,21 @@ internal sealed class DMG : IDisposable
 	public readonly Bus Bus;
 	public readonly PPU Ppu;
 	public readonly Timer Timer;
+	public readonly APU Apu;
 	private readonly CPU cpu;
 	
 	public DMG()
 	{
 		Display = new("ADMG", 160, 144, 2);
 		VramWindow = new("ADMG Tile Viewer", 16 * 8, 24 * 8, 2);
-		Cartridge = new(File.ReadAllBytes("/home/adrian/Roms/GB/sml2.gb"));
+		Cartridge = new(File.ReadAllBytes("/home/adrian/Roms/GB/tetris.gb"));
 		//Cartridge = new(File.ReadAllBytes("Roms/blargg/cpu_instrs/cpu_instrs.gb"));
 		InterruptController = new();
 		Joypad = new(InterruptController);
 		Bus = new(this);
 		Ppu = new(this);
 		Timer = new Timer(this);
+		Apu = new();
 		cpu = new(Bus, InterruptController);
 	}
 
@@ -71,9 +73,9 @@ internal sealed class DMG : IDisposable
 			Joypad.LeftPressed = Display.KeysDown.Contains(KeyboardKey.Left);
 			Joypad.RightPressed = Display.KeysDown.Contains(KeyboardKey.Right);
 			//Joypad.StartPressed = true;
-
+			
 			var cycles = 0;
-
+			
 			while (cycles < cyclesPerFrame)
 			{
 				if (cycles % cpuClockDivider == 0)
@@ -81,7 +83,7 @@ internal sealed class DMG : IDisposable
 
 				Ppu.Cycle();
 				Timer.Cycle();
-				
+				Apu.Tick();
 				cycles++;
 			}
 
@@ -104,5 +106,6 @@ internal sealed class DMG : IDisposable
 		GC.SuppressFinalize(this);
 		VramWindow.Dispose();
 		Display.Dispose();
+		Apu.Dispose();
 	}
 }

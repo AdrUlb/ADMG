@@ -8,6 +8,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\..\External\ASFW\Source\ASFW.Extension.Audio\ASFW.Extension.Audio.csproj" />
 		<ProjectReference Include="..\..\External\ASFW\Source\ASFW.Extension.Text\ASFW.Extension.Text.csproj" />
 		<ProjectReference Include="..\..\External\ASFW\Source\ASFW.Platform.Desktop\ASFW.Platform.Desktop.csproj" />
 		<ProjectReference Include="..\..\External\ASFW\Source\ASFW\ASFW.csproj" />

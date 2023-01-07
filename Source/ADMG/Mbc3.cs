@@ -3,8 +3,10 @@ namespace ADMG;
 internal sealed class Mbc3 : Mbc
 {
 	private readonly byte[] data;
-	
+
+	private bool ramAndTimerEnabled = false;
 	private int romBank = 0;
+	private byte ramOrTimerSelect;
 	
 	public Mbc3(byte[] data)
 	{
@@ -23,11 +25,17 @@ internal sealed class Mbc3 : Mbc
 		{
 			switch (address)
 			{
-				case >= 0x2000 and < 0x4000:
+				case < 0x2000:
+					ramAndTimerEnabled = (value & 0x0F) == 0x0A;
+					break;
+				case < 0x4000:
 					romBank = value;
 					break;
-				default:
-					romBank = romBank;
+				case < 0x6000:
+					if (!ramAndTimerEnabled)
+						return;
+
+					ramOrTimerSelect = value;
 					break;
 			}
 		}

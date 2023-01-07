@@ -5,7 +5,7 @@ internal sealed class Bus
 	private readonly DMG dmg;
 	private readonly byte[] bootrom;
 	private byte disbaleBootrom = 0;
-	
+
 	private readonly byte[] temp;
 
 	public Bus(DMG dmg)
@@ -29,6 +29,16 @@ internal sealed class Bus
 			0xFF06 => dmg.Timer.Modulo,
 			0xFF07 => dmg.Timer.Control,
 			0xFF0F => dmg.InterruptController.Requested,
+
+			
+			0xFF11 => dmg.Apu.NR11,
+			0xFF14 => dmg.Apu.NR14,
+			0xFF16 => dmg.Apu.NR21,
+			0xFF19 => dmg.Apu.NR24,
+			0xFF1E => dmg.Apu.NR34,
+			0xFF23 => dmg.Apu.NR44,
+			0xFF26 => dmg.Apu.NR52,
+
 			0xFF40 => dmg.Ppu.Control,
 			0xFF41 => dmg.Ppu.Status,
 			0xFF42 => dmg.Ppu.ScrollY,
@@ -68,6 +78,33 @@ internal sealed class Bus
 					break;
 				case 0xFF0F:
 					dmg.InterruptController.Requested = value;
+					break;
+				case 0xFF11:
+					dmg.Apu.NR11 = value;
+					break;
+				case 0xFF13:
+					dmg.Apu.NR13 = value;
+					break;
+				case 0xFF14:
+					dmg.Apu.NR14 = value;
+					break;
+				case 0xFF16:
+					dmg.Apu.NR21 = value;
+					break;
+				case 0xFF18:
+					dmg.Apu.NR23 = value;
+					break;
+				case 0xFF19:
+					dmg.Apu.NR24 = value;
+					break;
+				case 0xFF1D:
+					dmg.Apu.NR33 = value;
+					break;
+				case 0xFF1E:
+					dmg.Apu.NR34 = value;
+					break;
+				case 0xFF26:
+					dmg.Apu.NR52 = value;
 					break;
 				case 0xFF40:
 					dmg.Ppu.Control = value;

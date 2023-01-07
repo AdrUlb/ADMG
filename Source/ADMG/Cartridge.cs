@@ -17,12 +17,9 @@ internal sealed class Cartridge
 
 	private readonly bool hasRam = false;
 	private readonly bool hasBattery = false;
-	private readonly byte[] data;
 
 	public Cartridge(byte[] data)
 	{
-		this.data = data;
-
 		switch (data[0x147])
 		{
 			case 0x00:
