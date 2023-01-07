@@ -33,7 +33,9 @@ internal sealed class PPU
 	public byte ScrollX;
 	public byte ScrollY;
 	
-	public readonly int[] PaletteIndices = { 0, 1, 2, 3 };
+	public readonly int[] BackgroundPalette = { 0, 1, 2, 3 };
+	public readonly int[] ObjectPalette0 = { 0, 1, 2, 3 };
+	public readonly int[] ObjectPalette1 = { 0, 1, 2, 3 };
 	
 	private const int bitControlBgTilemap = 3;
 	private const int bitControlTiledata = 4;
@@ -57,19 +59,45 @@ internal sealed class PPU
 	public bool StatusLcdYCompare = false;
 	public PpuMode StatusMode = PpuMode.OamScan;
 
-	public byte Palette
+	public byte BackgroundPaletteByte
 	{
-		get => (byte)((PaletteIndices[0] & 0b11) | ((PaletteIndices[1] & 0b11) << 2) | ((PaletteIndices[2] & 0b11) << 4) | ((PaletteIndices[3] & 0b11) << 6));
+		get => (byte)((BackgroundPalette[0] & 0b11) | ((BackgroundPalette[1] & 0b11) << 2) | ((BackgroundPalette[2] & 0b11) << 4) | ((BackgroundPalette[3] & 0b11) << 6));
 
 		set
 		{
-			PaletteIndices[0] = value & 0b11;
-			PaletteIndices[1] = (value >> 2) & 0b11;
-			PaletteIndices[2] = (value >> 4) & 0b11;
-			PaletteIndices[3] = (value >> 6) & 0b11;
+			BackgroundPalette[0] = value & 0b11;
+			BackgroundPalette[1] = (value >> 2) & 0b11;
+			BackgroundPalette[2] = (value >> 4) & 0b11;
+			BackgroundPalette[3] = (value >> 6) & 0b11;
 		}
 	}
 	
+	public byte ObjectPalette0Byte
+	{
+		get => (byte)((ObjectPalette0[0] & 0b11) | ((ObjectPalette0[1] & 0b11) << 2) | ((ObjectPalette0[2] & 0b11) << 4) | ((ObjectPalette0[3] & 0b11) << 6));
+
+		set
+		{
+			ObjectPalette0[0] = value & 0b11;
+			ObjectPalette0[1] = (value >> 2) & 0b11;
+			ObjectPalette0[2] = (value >> 4) & 0b11;
+			ObjectPalette0[3] = (value >> 6) & 0b11;
+		}
+	}
+
+	public byte ObjectPalette1Byte
+	{
+		get => (byte)((ObjectPalette1[0] & 0b11) | ((ObjectPalette1[1] & 0b11) << 2) | ((ObjectPalette1[2] & 0b11) << 4) | ((ObjectPalette1[3] & 0b11) << 6));
+
+		set
+		{
+			ObjectPalette1[0] = value & 0b11;
+			ObjectPalette1[1] = (value >> 2) & 0b11;
+			ObjectPalette1[2] = (value >> 4) & 0b11;
+			ObjectPalette1[3] = (value >> 6) & 0b11;
+		}
+	}
+
 	public byte Control
 	{
 		get
@@ -245,10 +273,11 @@ internal sealed class PPU
 			var sprite = false;
 
 			var pixel = 0;
-
-			var pixelSprite = -1;
-			var bgOverSprite = false;
-
+			var palette = BackgroundPalette;
+			
+			var prevObj = -1;
+			var bgOverObj = false;
+			
 			foreach (var i in selectedSprites[..selectedSpriteCount])
 			{
 				var spriteX = dmg.Bus[(ushort)(0xFE00 + i * 4 + 1)] - 8;
@@ -256,9 +285,9 @@ internal sealed class PPU
 				if (spriteX > x || spriteX + 8 <= x)
 					continue;
 
-				if (pixelSprite != -1)
+				if (prevObj != -1)
 				{
-					var prevSpriteX = dmg.Bus[(ushort)(0xFE00 + pixelSprite * 4 + 1)] - 8;
+					var prevSpriteX = dmg.Bus[(ushort)(0xFE00 + prevObj * 4 + 1)] - 8;
 					if (prevSpriteX <= spriteX)
 						continue;
 				}
@@ -269,7 +298,8 @@ internal sealed class PPU
 
 				var xFlip = (attribs & (1 << 5)) != 0;
 				var yFlip = (attribs & (1 << 6)) != 0;
-				bgOverSprite = (attribs & (1 << 7)) != 0;
+				bgOverObj = (attribs & (1 << 7)) != 0;
+				var objPalette = (attribs & (1 << 4)) != 0;
 
 				var tileRow = LcdY - spriteY;
 				var tileCol = x - spriteX;
@@ -289,15 +319,16 @@ internal sealed class PPU
 				var bit1 = (rowByte1 >> (7 - tileCol)) & 1;
 				var bit2 = (rowByte2 >> (7 - tileCol)) & 1;
 				pixel = (bit2 << 1) | bit1;
+				palette = objPalette ? ObjectPalette1 : ObjectPalette0; 
 
 				if (pixel == 0)
 					continue;
 
 				sprite = true;
-				pixelSprite = i;
+				prevObj = i;
 			}
 
-			if (!sprite || bgOverSprite)
+			if (!sprite || bgOverObj)
 			{
 				var xx = x + ScrollX;
 				var tilemapIndex = yy / 8 % 32 * 32 + xx / 8 % 32;
@@ -316,11 +347,14 @@ internal sealed class PPU
 
 				var bgPixel = (bit2 << 1) | bit1;
 
-				if (!sprite || (bgOverSprite && bgPixel != 0))
+				if (!sprite || (bgOverObj && bgPixel != 0))
+				{
 					pixel = bgPixel;
+					palette = BackgroundPalette;
+				}
 			}
 
-			var color = DMG.Palette[PaletteIndices[pixel]];
+			var color = DMG.Colors[palette[pixel]];
 			dmg.Display[x, LcdY] = color;
 		}
 	}
@@ -346,7 +380,7 @@ internal sealed class PPU
 					var bit1 = (rowByte1 >> (7 - tileCol)) & 1;
 					var bit2 = (rowByte2 >> (7 - tileCol)) & 1;
 					var pix = (bit2 << 1) | bit1;
-					var color = DMG.Palette[pix];
+					var color = DMG.Colors[pix];
 					var x = i % 16 * 8 + tileCol;
 					var y = i / 16 * 8 + tileRow;
 					dmg.VramWindow[x, y] = color;

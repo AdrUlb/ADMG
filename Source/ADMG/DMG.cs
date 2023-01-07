@@ -7,7 +7,7 @@ namespace ADMG;
 
 internal sealed class DMG : IDisposable
 {
-	public static readonly Color[] Palette =
+	public static readonly Color[] Colors =
 	{
 		Color.White,
 		Color.FromArgb(0xAA, 0xAA, 0xAA),
