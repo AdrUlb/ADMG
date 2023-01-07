@@ -32,7 +32,9 @@ internal sealed class PPU
 
 	public byte ScrollX;
 	public byte ScrollY;
-
+	
+	public readonly int[] PaletteIndices = { 0, 1, 2, 3 };
+	
 	private const int bitControlBgTilemap = 3;
 	private const int bitControlTiledata = 4;
 	private const int bitControlEnable = 7;
@@ -55,6 +57,19 @@ internal sealed class PPU
 	public bool StatusLcdYCompare = false;
 	public PpuMode StatusMode = PpuMode.OamScan;
 
+	public byte Palette
+	{
+		get => (byte)((PaletteIndices[0] & 0b11) | ((PaletteIndices[1] & 0b11) << 2) | ((PaletteIndices[2] & 0b11) << 4) | ((PaletteIndices[3] & 0b11) << 6));
+
+		set
+		{
+			PaletteIndices[0] = value & 0b11;
+			PaletteIndices[1] = (value >> 2) & 0b11;
+			PaletteIndices[2] = (value >> 4) & 0b11;
+			PaletteIndices[3] = (value >> 6) & 0b11;
+		}
+	}
+	
 	public byte Control
 	{
 		get
@@ -211,7 +226,7 @@ internal sealed class PPU
 		Span<int> selectedSprites = stackalloc int[10];
 
 		var selectedSpriteCount = 0;
-		
+
 		for (var i = 0; i < 40; i++)
 		{
 			var y = dmg.Bus[(ushort)(0xFE00 + i * 4)] - 16;
@@ -233,6 +248,7 @@ internal sealed class PPU
 
 			var pixelSprite = -1;
 			var bgOverSprite = false;
+
 			foreach (var i in selectedSprites[..selectedSpriteCount])
 			{
 				var spriteX = dmg.Bus[(ushort)(0xFE00 + i * 4 + 1)] - 8;
@@ -246,7 +262,7 @@ internal sealed class PPU
 					if (prevSpriteX <= spriteX)
 						continue;
 				}
-				
+
 				var spriteY = dmg.Bus[(ushort)(0xFE00 + i * 4)] - 16;
 				var tileIndex = dmg.Bus[(ushort)(0xFE00 + i * 4 + 2)];
 				var attribs = dmg.Bus[(ushort)(0xFE00 + i * 4 + 3)];
@@ -254,7 +270,7 @@ internal sealed class PPU
 				var xFlip = (attribs & (1 << 5)) != 0;
 				var yFlip = (attribs & (1 << 6)) != 0;
 				bgOverSprite = (attribs & (1 << 7)) != 0;
-				
+
 				var tileRow = LcdY - spriteY;
 				var tileCol = x - spriteX;
 
@@ -263,7 +279,7 @@ internal sealed class PPU
 
 				if (yFlip)
 					tileRow = 7 - tileRow;
-				
+
 				var tileOffset = tileIndex * 16;
 				var rowOffset = tileRow * 2;
 
@@ -275,12 +291,12 @@ internal sealed class PPU
 				pixel = (bit2 << 1) | bit1;
 
 				if (pixel == 0)
-					break;
-				
+					continue;
+
 				sprite = true;
 				pixelSprite = i;
 			}
-			
+
 			if (!sprite || bgOverSprite)
 			{
 				var xx = x + ScrollX;
@@ -297,14 +313,14 @@ internal sealed class PPU
 
 				var bit1 = (rowByte1 >> (7 - tileCol)) & 1;
 				var bit2 = (rowByte2 >> (7 - tileCol)) & 1;
-				
+
 				var bgPixel = (bit2 << 1) | bit1;
-				
+
 				if (!sprite || (bgOverSprite && bgPixel != 0))
 					pixel = bgPixel;
 			}
-			
-			var color = DMG.Palette[pixel];
+
+			var color = DMG.Palette[PaletteIndices[pixel]];
 			dmg.Display[x, LcdY] = color;
 		}
 	}

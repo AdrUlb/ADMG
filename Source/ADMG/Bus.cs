@@ -35,6 +35,7 @@ internal sealed class Bus
 			0xFF43 => dmg.Ppu.ScrollX,
 			0xFF44 => dmg.Ppu.LcdY,
 			0xFF45 => dmg.Ppu.LcdYCompare,
+			0xFF47 => dmg.Ppu.Palette,
 			0xFFFF => dmg.InterruptController.Enabled,
 			_ => temp[address]
 		};
@@ -82,6 +83,9 @@ internal sealed class Bus
 				case 0xFF46:
 					for (var i = 0; i < 0x100; i++) // Hack: Instant OAM DMA transfer
 						this[(ushort)(0xFE00 + i)] = this[(ushort)((value << 8) + i)];
+					break;
+				case 0xFF47:
+					dmg.Ppu.Palette = value;
 					break;
 				case 0xFF50:
 					disbaleBootrom = value;
