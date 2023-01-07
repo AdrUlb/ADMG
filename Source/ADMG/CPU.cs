@@ -20,6 +20,7 @@ internal sealed class CPU
 
 	private bool processedInts = false;
 	private bool intsEnabled = false;
+	private bool halted = false;
 
 	private int op;
 	private int opCycle = 0;
@@ -27,6 +28,7 @@ internal sealed class CPU
 	private byte readLo;
 	private byte readHi;
 
+	
 	private ushort read16 => (ushort)((readHi << 8) | readLo);
 
 	private readonly StreamWriter log;
@@ -266,6 +268,8 @@ internal sealed class CPU
 
 		if (opCycle == 0 && !processedInts && (interruptController.Enabled & interruptController.Requested) != 0)
 		{
+			halted = false;
+
 			if (!intsEnabled)
 			{
 				processedInts = true;
@@ -314,6 +318,9 @@ internal sealed class CPU
 
 			throw new UnreachableException();
 		}
+
+		if (halted)
+			return;
 
 		if (++opCycle == 1)
 		{
@@ -804,7 +811,7 @@ internal sealed class CPU
 
 		if ((Reg8Id)opZ == Reg8Id.MHL && (Reg8Id)opY == Reg8Id.MHL) // HALT
 		{
-			// TODO: HALT
+			halted = true;
 			opCycle = 0;
 			return;
 		}

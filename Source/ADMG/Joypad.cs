@@ -2,35 +2,129 @@ namespace ADMG;
 
 internal sealed class Joypad
 {
+	private readonly InterruptController interruptController;
+	
 	public bool ActionSelected = false;
 	public bool DirectionSelected = false;
 
-	public bool UpPressed = false;
-	public bool DownPressed = false;
-	public bool LeftPressed = false;
-	public bool RightPressed = false;
-	public bool StartPressed = false;
-	public bool SelectPressed = false;
-	public bool APressed = false;
-	public bool BPressed = false;
-	
+	private bool upPressed;
+	private bool downPressed;
+	private bool leftPressed;
+	private bool rightPressed;
+	private bool startPressed;
+	private bool selectPressed;
+	private bool aPressed;
+	private bool bPressed;
+
+	public bool UpPressed
+	{
+		get => upPressed;
+
+		set
+		{
+			var old = upPressed;
+			upPressed = value;
+			if (old != value && DirectionSelected)
+				interruptController.RequestJoypad = true;
+		}
+	}
+
+	public bool DownPressed
+	{
+		get => downPressed;
+
+		set
+		{
+			var old = downPressed;
+			downPressed = value;
+			if (old != value && DirectionSelected)
+				interruptController.RequestJoypad = true;
+		}
+	}
+
+	public bool LeftPressed
+	{
+		get => leftPressed;
+
+		set
+		{
+			var old = leftPressed;
+			leftPressed = value;
+			if (old != value && DirectionSelected)
+				interruptController.RequestJoypad = true;
+		}
+	}
+
+	public bool RightPressed
+	{
+		get => rightPressed;
+
+		set
+		{
+			var old = rightPressed;
+			rightPressed = value;
+			if (old != value && DirectionSelected)
+				interruptController.RequestJoypad = true;
+		}
+	}
+
+	public bool StartPressed
+	{
+		get => startPressed;
+
+		set
+		{
+			var old = startPressed;
+			startPressed = value;
+			if (old != value && ActionSelected)
+				interruptController.RequestJoypad = true;
+		}
+	}
+
+	public bool SelectPressed
+	{
+		get => selectPressed;
+
+		set
+		{
+			var old = selectPressed;
+			selectPressed = value;
+			if (old != value && ActionSelected)
+				interruptController.RequestJoypad = true;
+		}
+	}
+
+	public bool APressed
+	{
+		get => aPressed;
+
+		set
+		{
+			var old = aPressed;
+			aPressed = value;
+			if (old != value && ActionSelected)
+				interruptController.RequestJoypad = true;
+		}
+	}
+
+	public bool BPressed
+	{
+		get => bPressed;
+
+		set
+		{
+			var old = bPressed;
+			bPressed = value;
+			if (old != value && ActionSelected)
+				interruptController.RequestJoypad = true;
+		}
+	}
+
 	public byte Control
 	{
 		get
 		{
 			byte value = 0;
-
-			/*if (RightPressed || APressed)
-				value |= 1 << 0;
-
-			if (LeftPressed || BPressed)
-				value |= 1 << 1;
-
-			if (UpPressed || SelectPressed)
-				value |= 1 << 2;
-
-			if (DownPressed || StartPressed)
-				value |= 1 << 3;*/
 
 			if (DirectionSelected)
 				value |= 1 << 4;
@@ -76,5 +170,10 @@ internal sealed class Joypad
 			DirectionSelected = (value & (1 << 4)) == 0;
 			ActionSelected = (value & (1 << 5)) == 0;
 		}
+	}
+
+	public Joypad(InterruptController interruptController)
+	{
+		this.interruptController = interruptController;
 	}
 }

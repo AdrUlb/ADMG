@@ -36,8 +36,4 @@
 		</None>
 	</ItemGroup>
 
-	<ItemGroup>
-		<Folder Include="Roms\blargg\cpu_instrs" />
-	</ItemGroup>
-
 </Project>
