@@ -230,7 +230,9 @@ internal sealed class PPU
 			var sprite = false;
 
 			var pixel = 0;
-			
+
+			var pixelSprite = -1;
+			var bgOverSprite = false;
 			foreach (var i in selectedSprites[..selectedSpriteCount])
 			{
 				var spriteX = dmg.Bus[(ushort)(0xFE00 + i * 4 + 1)] - 8;
@@ -238,13 +240,31 @@ internal sealed class PPU
 				if (spriteX > x || spriteX + 8 <= x)
 					continue;
 
+				if (pixelSprite != -1)
+				{
+					var prevSpriteX = dmg.Bus[(ushort)(0xFE00 + pixelSprite * 4 + 1)] - 8;
+					if (prevSpriteX <= spriteX)
+						continue;
+				}
+				
 				var spriteY = dmg.Bus[(ushort)(0xFE00 + i * 4)] - 16;
-				var spriteTileIndex = dmg.Bus[(ushort)(0xFE00 + i * 4 + 2)];
+				var tileIndex = dmg.Bus[(ushort)(0xFE00 + i * 4 + 2)];
+				var attribs = dmg.Bus[(ushort)(0xFE00 + i * 4 + 3)];
+
+				var xFlip = (attribs & (1 << 5)) != 0;
+				var yFlip = (attribs & (1 << 6)) != 0;
+				bgOverSprite = (attribs & (1 << 7)) != 0;
 				
 				var tileRow = LcdY - spriteY;
 				var tileCol = x - spriteX;
 
-				var tileOffset = spriteTileIndex * 16;
+				if (xFlip)
+					tileCol = 7 - tileCol;
+
+				if (yFlip)
+					tileRow = 7 - tileRow;
+				
+				var tileOffset = tileIndex * 16;
 				var rowOffset = tileRow * 2;
 
 				var rowByte1 = dmg.Bus[(ushort)(0x8000 + tileOffset + rowOffset)];
@@ -258,10 +278,10 @@ internal sealed class PPU
 					break;
 				
 				sprite = true;
-				break;
+				pixelSprite = i;
 			}
 			
-			if (!sprite)
+			if (!sprite || bgOverSprite)
 			{
 				var xx = x + ScrollX;
 				var tilemapIndex = yy / 8 % 32 * 32 + xx / 8 % 32;
@@ -277,52 +297,16 @@ internal sealed class PPU
 
 				var bit1 = (rowByte1 >> (7 - tileCol)) & 1;
 				var bit2 = (rowByte2 >> (7 - tileCol)) & 1;
-				pixel = (bit2 << 1) | bit1;
+				
+				var bgPixel = (bit2 << 1) | bit1;
+				
+				if (!sprite || (bgOverSprite && bgPixel != 0))
+					pixel = bgPixel;
 			}
 			
 			var color = DMG.Palette[pixel];
 			dmg.Display[x, LcdY] = color;
 		}
-
-		/*for (var i = 0; i < 40; i++)
-		{
-			var y = dmg.Bus[(ushort)(0xFE00 + i * 4)] - 16;
-			var x = dmg.Bus[(ushort)(0xFE00 + i * 4 + 1)] - 8;
-			var tileIndex = dmg.Bus[(ushort)(0xFE00 + i * 4 + 2)];
-			var tileOffset = tileIndex * 16;
-			
-			for (var tileRow = 0; tileRow < 8; tileRow++)
-			{
-				yy = y + tileRow;
-				if (yy < 0)
-					continue;
-				if (yy >= 144)
-					break;
-					
-				var rowOffset = tileRow * 2;
-
-				var rowByte1 = dmg.Bus[(ushort)(0x8000 + tileOffset + rowOffset)];
-				var rowByte2 = dmg.Bus[(ushort)(0x8000 + tileOffset + rowOffset + 1)];
-
-				for (var tileCol = 0; tileCol < 8; tileCol++)
-				{
-					var xx = x + tileCol;
-					if (xx < 0)
-						continue;
-					if (xx >= 160)
-						break;
-						
-					var bit1 = (rowByte1 >> (7 - tileCol)) & 1;
-					var bit2 = (rowByte2 >> (7 - tileCol)) & 1;
-					var pix = (bit2 << 1) | bit1;
-
-					if (pix == 0)
-						continue;
-					
-					var color = DMG.Palette[pix];
-					dmg.Display[xx, yy] = color;
-				}
-			}*/
 	}
 
 
