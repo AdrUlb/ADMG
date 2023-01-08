@@ -29,7 +29,7 @@ internal sealed class Bus
 			0xFF06 => dmg.Timer.Modulo,
 			0xFF07 => dmg.Timer.Control,
 			0xFF0F => dmg.InterruptController.Requested,
-			
+
 			0xFF10 => dmg.Apu.NR10,
 			0xFF11 => dmg.Apu.NR11,
 			0xFF12 => dmg.Apu.NR12,
@@ -37,10 +37,12 @@ internal sealed class Bus
 			0xFF16 => dmg.Apu.NR21,
 			0xFF17 => dmg.Apu.NR22,
 			0xFF19 => dmg.Apu.NR24,
+			0xFF1A => dmg.Apu.NR30,
+			0xFF1C => dmg.Apu.NR32,
 			0xFF1E => dmg.Apu.NR34,
 			0xFF23 => dmg.Apu.NR44,
 			0xFF26 => dmg.Apu.NR52,
-
+			>= 0xFF30 and < 0xFF40 => dmg.Apu.WaveRam[address - 0xFF30],
 			0xFF40 => dmg.Ppu.Control,
 			0xFF41 => dmg.Ppu.Status,
 			0xFF42 => dmg.Ppu.ScrollY,
@@ -108,6 +110,15 @@ internal sealed class Bus
 				case 0xFF19:
 					dmg.Apu.NR24 = value;
 					break;
+				case 0xFF1A:
+					dmg.Apu.NR30 = value;
+					break;
+				case 0xFF1B:
+					dmg.Apu.NR31 = value;
+					break;
+				case 0xFF1C:
+					dmg.Apu.NR32 = value;
+					break;
 				case 0xFF1D:
 					dmg.Apu.NR33 = value;
 					break;
@@ -116,6 +127,9 @@ internal sealed class Bus
 					break;
 				case 0xFF26:
 					dmg.Apu.NR52 = value;
+					break;
+				case >= 0xFF30 and < 0xFF40:
+					dmg.Apu.WaveRam[address - 0xFF30] = value;
 					break;
 				case 0xFF40:
 					dmg.Ppu.Control = value;

@@ -58,7 +58,11 @@ public sealed class APU : IAudioSource, IDisposable
 	private int channel2CurrentVolume;
 
 	private bool enableChannel3 = false;
-	private ushort waveLengthChannel3 = 0;
+	private bool enableChannel3Length = false;
+	private ushort channel3WaveLength = 0;
+	private int channel3LengthTimer = 0;
+	private bool channel3DacEnable;
+	private int channel3OutputLevel;
 
 	private bool enableChannel4 = false;
 
@@ -211,7 +215,7 @@ public sealed class APU : IAudioSource, IDisposable
 		{
 			byte value = 0;
 
-			if (enableChannel1Length)
+			if (enableChannel2Length)
 				value |= (1 << 6);
 
 			return value;
@@ -233,21 +237,57 @@ public sealed class APU : IAudioSource, IDisposable
 		}
 	}
 
+	public byte NR30
+	{
+		get
+		{
+			byte value = 0;
+
+			if (channel3DacEnable)
+				value |= 1 << 7;
+
+			return value;
+		}
+
+		set => channel3DacEnable = (value & (1 << 7)) != 0;
+	}
+
+	public byte NR31
+	{
+		set => channel3LengthTimer = 256 - value;
+	}
+
+	public byte NR32
+	{
+		get => (byte)(channel3OutputLevel << 5);
+		set => channel3OutputLevel = (value >> 5) & 0b11;
+	}
+
 	public byte NR33
 	{
-		set => waveLengthChannel3 = (ushort)((waveLengthChannel3 & 0b0000011100000000) | value);
+		set => channel3WaveLength = (ushort)((channel3WaveLength & 0b0000011100000000) | value);
 	}
 
 	public byte NR34
 	{
-		get => 0xFF; // TODO
+		get
+		{
+			byte value = 0;
+
+			if (enableChannel3Length)
+				value |= (1 << 6);
+
+			return value;
+		}
 
 		set
 		{
-			waveLengthChannel3 = (ushort)((waveLengthChannel3 & 0xFF) | ((value & 0b111) << 8));
+			channel3WaveLength = (ushort)((channel3WaveLength & 0xFF) | ((value & 0b111) << 8));
 
 			if ((value & (1 << 7)) != 0)
 				enableChannel3 = true;
+
+			enableChannel3Length = (value & (1 << 6)) != 0;
 		}
 	}
 
@@ -289,6 +329,8 @@ public sealed class APU : IAudioSource, IDisposable
 		set => enabled = (value & (1 << bitEnabled)) != 0;
 	}
 
+	public readonly byte[] WaveRam = new byte[16];
+
 	//private short amplitude = 0;
 
 	private static readonly byte[] waveDutyTable =
@@ -311,6 +353,10 @@ public sealed class APU : IAudioSource, IDisposable
 	private int channel2DutyCycle = 0;
 	private readonly short[] channel2Amplitudes = new short[ampsPerSample];
 	private int channel2FreqTimer = 0;
+
+	private int channel3WaveIndex = 0;
+	private readonly short[] channel3Amplitudes = new short[ampsPerSample];
+	private int channel3FreqTimer = 0;
 
 	private int ampI = 0;
 
@@ -341,11 +387,8 @@ public sealed class APU : IAudioSource, IDisposable
 				if (enableChannel1Length && channel1LengthTimer > 0)
 				{
 					channel1LengthTimer--;
-
 					if (channel1LengthTimer <= 0)
-					{
 						enableChannel1 = false;
-					}
 				}
 
 				if (enableChannel2Length && channel2LengthTimer > 0)
@@ -353,6 +396,13 @@ public sealed class APU : IAudioSource, IDisposable
 					channel2LengthTimer--;
 					if (channel2LengthTimer <= 0)
 						enableChannel2 = false;
+				}
+
+				if (enableChannel3Length && channel3LengthTimer > 0)
+				{
+					channel3LengthTimer--;
+					if (channel3LengthTimer <= 0)
+						enableChannel3 = false;
 				}
 			}
 
@@ -447,19 +497,27 @@ public sealed class APU : IAudioSource, IDisposable
 		if (channel1FreqTimer == 0)
 		{
 			channel1FreqTimer = (2048 - channel1WaveLength) * 4;
-			if (channel1DutyCycle++ > 7)
+			if (++channel1DutyCycle > 7)
 				channel1DutyCycle = 0;
 		}
 
 		if (channel2FreqTimer == 0)
 		{
 			channel2FreqTimer = (2048 - channel2WaveLength) * 4;
-			if (channel2DutyCycle++ > 7)
+			if (++channel2DutyCycle > 7)
 				channel2DutyCycle = 0;
+		}
+
+		if (channel3FreqTimer == 0)
+		{
+			channel3FreqTimer = (2048 - channel3WaveLength) * 2;
+			if (++channel3WaveIndex >= 32)
+				channel3WaveIndex = 0;
 		}
 
 		channel1FreqTimer--;
 		channel2FreqTimer--;
+		channel3FreqTimer--;
 
 		{
 			var amplitude = 0;
@@ -481,6 +539,41 @@ public sealed class APU : IAudioSource, IDisposable
 			channel2Amplitudes[ampI] = (short)amplitude;
 		}
 
+		{
+			short amplitude = 0;
+
+			if (enableChannel3 && channel3DacEnable)
+			{
+				var waveRamIndex = channel3WaveIndex / 2;
+
+				var ram = WaveRam[waveRamIndex];
+
+				byte sample = 0;
+
+				if (channel3WaveIndex % 2 == 0) // Play upper 4 bits
+					sample = (byte)(ram >> 4);
+				else
+					sample = (byte)(ram & 0xF);
+
+				switch (channel3OutputLevel)
+				{
+					case 0:
+						sample >>= 4;
+						break;
+					case 2:
+						sample >>= 1;
+						break;
+					case 3:
+						sample >>= 2;
+						break;
+				}
+				
+				amplitude = (short)(sample - 8);
+			}
+
+			channel3Amplitudes[ampI] = amplitude;
+		}
+
 		ampI++;
 
 		if (ampI == ampsPerSample)
@@ -491,11 +584,9 @@ public sealed class APU : IAudioSource, IDisposable
 			short sample = 0;
 
 			{
-				if (enableChannel1)
-					sample += channel1Amplitudes[last];
-
-				if (enableChannel2)
-					sample += channel2Amplitudes[last];
+				sample += channel1Amplitudes[last];
+				sample += channel2Amplitudes[last];
+				sample += channel3Amplitudes[last];
 
 				sample *= 500;
 			}
