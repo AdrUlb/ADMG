@@ -30,7 +30,7 @@ internal sealed class DMG : IDisposable
 	{
 		Display = new("ADMG", 160, 144, 2);
 		VramWindow = new("ADMG Tile Viewer", 16 * 8, 24 * 8, 2);
-		Cartridge = new(File.ReadAllBytes("/home/adrian/Roms/GB/tetris.gb"));
+		Cartridge = new(File.ReadAllBytes("/home/adrian/Roms/GB/pokered.gb"));
 		//Cartridge = new(File.ReadAllBytes("Roms/blargg/cpu_instrs/cpu_instrs.gb"));
 		InterruptController = new();
 		Joypad = new(InterruptController);
@@ -43,9 +43,9 @@ internal sealed class DMG : IDisposable
 
 	public void Start()
 	{
-		VramWindow.TrySetDarkMode(true);
+		/*VramWindow.TrySetDarkMode(true);
 		VramWindow.Visible = true;
-		VramWindow.Start();
+		VramWindow.Start();*/
 		
 		Display.TrySetDarkMode(true);
 		Display.Visible = true;
@@ -104,7 +104,7 @@ internal sealed class DMG : IDisposable
 	public void Dispose()
 	{
 		GC.SuppressFinalize(this);
-		VramWindow.Dispose();
+		//VramWindow.Dispose();
 		Display.Dispose();
 		Apu.Dispose();
 	}

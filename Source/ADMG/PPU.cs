@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Runtime.CompilerServices;
 
 namespace ADMG;
@@ -36,7 +37,7 @@ internal sealed class PPU
 	public byte WindowY;
 	public byte WindowOffX;
 	public byte WindowOffY;
-	
+
 	public readonly int[] BackgroundPalette = { 0, 1, 2, 3 };
 	public readonly int[] ObjectPalette0 = { 0, 1, 2, 3 };
 	public readonly int[] ObjectPalette1 = { 0, 1, 2, 3 };
@@ -73,7 +74,7 @@ internal sealed class PPU
 	private int selectedObjsCount = 0;
 	private bool windowConditionY = false;
 	private bool windowActive = false;
-	
+
 	public byte BackgroundPaletteByte
 	{
 		get => (byte)((BackgroundPalette[0] & 0b11) | ((BackgroundPalette[1] & 0b11) << 2) | ((BackgroundPalette[2] & 0b11) << 4) | ((BackgroundPalette[3] & 0b11) << 6));
@@ -86,7 +87,7 @@ internal sealed class PPU
 			BackgroundPalette[3] = (value >> 6) & 0b11;
 		}
 	}
-	
+
 	public byte ObjectPalette0Byte
 	{
 		get => (byte)((ObjectPalette0[0] & 0b11) | ((ObjectPalette0[1] & 0b11) << 2) | ((ObjectPalette0[2] & 0b11) << 4) | ((ObjectPalette0[3] & 0b11) << 6));
@@ -121,7 +122,7 @@ internal sealed class PPU
 
 			if (ControlObjSize)
 				value |= 1 << bitControlObjSize;
-			
+
 			if (ControlBgTilemap)
 				value |= 1 << bitControlBgTilemap;
 
@@ -183,6 +184,7 @@ internal sealed class PPU
 			StatusMode2Interrupt = (value & (1 << bitStatusMode2Interrupt)) != 0;
 			StatusMode1Interrupt = (value & (1 << bitStatusMode1Interrupt)) != 0;
 			StatusMode0Interrupt = (value & (1 << bitStatusMode0Interrupt)) != 0;
+			dmg.InterruptController.RequestLcdStat = true;
 		}
 	}
 
@@ -220,13 +222,13 @@ internal sealed class PPU
 	{
 		if (dot % 456 == 1)
 			windowConditionY = LcdY == WindowY;
-		
+
 		var objHeight = ControlObjSize ? 16 : 8;
 
 		if (dot % 456 == 80)
 		{
 			selectedObjsCount = 0;
-			
+
 			for (var i = 0; i < 40; i++)
 			{
 				var y = dmg.Bus[(ushort)(0xFE00 + i * 4)] - 16;
@@ -262,11 +264,12 @@ internal sealed class PPU
 		if (dot % 456 == 0)
 		{
 			LcdY++;
+
 			if (LcdY == 144)
 			{
 				DisplayFrame();
-				dmg.InterruptController.RequestVBlank = true;
 				StatusMode = PpuMode.VBlank;
+				dmg.InterruptController.RequestVBlank = true;
 				if (StatusMode1Interrupt)
 					dmg.InterruptController.RequestLcdStat = true;
 			}
@@ -320,7 +323,7 @@ internal sealed class PPU
 
 			var pixel = 0;
 			var palette = BackgroundPalette;
-			
+
 			var prevObj = -1;
 			var bgOverObj = false;
 
@@ -409,7 +412,7 @@ internal sealed class PPU
 			if (windowActive)
 				WindowOffX++;
 		}
-		
+
 		if (windowActive)
 			WindowOffY++;
 	}

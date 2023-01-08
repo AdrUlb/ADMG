@@ -28,7 +28,7 @@ internal sealed class CPU
 	private byte readLo;
 	private byte readHi;
 
-	
+
 	private ushort read16 => (ushort)((readHi << 8) | readLo);
 
 	private readonly StreamWriter log;
@@ -270,53 +270,52 @@ internal sealed class CPU
 		{
 			halted = false;
 
-			if (!intsEnabled)
+			processedInts = true;
+
+			if (intsEnabled)
 			{
-				processedInts = true;
-				return;
+				intsEnabled = false;
+
+				bus[--RegSP] = (byte)(RegPC >> 8);
+				bus[--RegSP] = (byte)(RegPC & 0xFF);
+
+				if (interruptController is { EnableVBlank: true, RequestVBlank: true })
+				{
+					interruptController.RequestVBlank = false;
+					RegPC = 0x40;
+					return;
+				}
+
+				if (interruptController is { EnableLcdStat: true, RequestLcdStat: true })
+				{
+					interruptController.RequestLcdStat = false;
+					RegPC = 0x48;
+					return;
+				}
+
+				if (interruptController is { EnableTimer: true, RequestTimer: true })
+				{
+					interruptController.RequestTimer = false;
+					RegPC = 0x50;
+					return;
+				}
+
+				if (interruptController is { EnableSerial: true, RequestSerial: true })
+				{
+					interruptController.RequestSerial = false;
+					RegPC = 0x58;
+					return;
+				}
+
+				if (interruptController is { EnableJoypad: true, RequestJoypad: true })
+				{
+					interruptController.RequestJoypad = false;
+					RegPC = 0x60;
+					return;
+				}
+
+				throw new UnreachableException();
 			}
-
-			intsEnabled = false;
-			
-			bus[--RegSP] = (byte)(RegPC >> 8);
-			bus[--RegSP] = (byte)(RegPC & 0xFF);
-
-			if (interruptController is { EnableVBlank: true, RequestVBlank: true })
-			{
-				interruptController.RequestVBlank = false;
-				RegPC = 0x40;
-				return;
-			}
-
-			if (interruptController is { EnableLcdStat: true, RequestLcdStat: true })
-			{
-				interruptController.RequestLcdStat = false;
-				RegPC = 0x48;
-				return;
-			}
-
-			if (interruptController is { EnableTimer: true, RequestTimer: true })
-			{
-				interruptController.RequestTimer = false;
-				RegPC = 0x50;
-				return;
-			}
-
-			if (interruptController is { EnableSerial: true, RequestSerial: true })
-			{
-				interruptController.RequestSerial = false;
-				RegPC = 0x58;
-				return;
-			}
-
-			if (interruptController is { EnableJoypad: true, RequestJoypad: true })
-			{
-				interruptController.RequestJoypad = false;
-				RegPC = 0x60;
-				return;
-			}
-
-			throw new UnreachableException();
 		}
 
 		if (halted)
@@ -1258,6 +1257,7 @@ internal sealed class CPU
 			case 4: // CALL cond, u16
 				if (opY >= 4) // Invalid opcode
 					break;
+
 				switch (opCycle)
 				{
 					case 2:
