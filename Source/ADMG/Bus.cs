@@ -29,11 +29,12 @@ internal sealed class Bus
 			0xFF06 => dmg.Timer.Modulo,
 			0xFF07 => dmg.Timer.Control,
 			0xFF0F => dmg.InterruptController.Requested,
-
 			
 			0xFF11 => dmg.Apu.NR11,
+			0xFF12 => dmg.Apu.NR12,
 			0xFF14 => dmg.Apu.NR14,
 			0xFF16 => dmg.Apu.NR21,
+			0xFF17 => dmg.Apu.NR22,
 			0xFF19 => dmg.Apu.NR24,
 			0xFF1E => dmg.Apu.NR34,
 			0xFF23 => dmg.Apu.NR44,
@@ -82,6 +83,9 @@ internal sealed class Bus
 				case 0xFF11:
 					dmg.Apu.NR11 = value;
 					break;
+				case 0xFF12:
+					dmg.Apu.NR12 = value;
+					break;
 				case 0xFF13:
 					dmg.Apu.NR13 = value;
 					break;
@@ -90,6 +94,9 @@ internal sealed class Bus
 					break;
 				case 0xFF16:
 					dmg.Apu.NR21 = value;
+					break;
+				case 0xFF17:
+					dmg.Apu.NR22 = value;
 					break;
 				case 0xFF18:
 					dmg.Apu.NR23 = value;
