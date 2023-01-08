@@ -212,6 +212,9 @@ internal sealed class PPU
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private void ModeOamScan()
 	{
+		if (dot % 456 == 1)
+			windowConditionY = LcdY == WindowY;
+		
 		if (dot % 456 == 80)
 		{
 			selectedObjsCount = 0;
@@ -251,7 +254,6 @@ internal sealed class PPU
 		if (dot % 456 == 0)
 		{
 			LcdY++;
-			windowConditionY = LcdY == WindowY;
 			if (LcdY == 144)
 			{
 				DisplayFrame();
