@@ -40,7 +40,8 @@ internal sealed class PPU
 	public readonly int[] BackgroundPalette = { 0, 1, 2, 3 };
 	public readonly int[] ObjectPalette0 = { 0, 1, 2, 3 };
 	public readonly int[] ObjectPalette1 = { 0, 1, 2, 3 };
-	
+
+	private const int bitControlObjSize = 2;
 	private const int bitControlBgTilemap = 3;
 	private const int bitControlTiledata = 4;
 	private const int bitControlWindowEnable = 5;
@@ -54,6 +55,7 @@ internal sealed class PPU
 	private const int bitStatusMode2Interrupt = 5;
 	private const int bitStatusLcdYCompareInterrupt = 6;
 
+	public bool ControlObjSize = false;
 	public bool ControlBgTilemap = false;
 	public bool ControlTiledata = false;
 	public bool ControlWindowEnable = false;
@@ -117,6 +119,9 @@ internal sealed class PPU
 		{
 			byte value = 0;
 
+			if (ControlObjSize)
+				value |= 1 << bitControlObjSize;
+			
 			if (ControlBgTilemap)
 				value |= 1 << bitControlBgTilemap;
 
@@ -137,6 +142,7 @@ internal sealed class PPU
 
 		set
 		{
+			ControlObjSize = (value & (1 << bitControlObjSize)) != 0;
 			ControlBgTilemap = (value & (1 << bitControlBgTilemap)) != 0;
 			ControlTiledata = (value & (1 << bitControlTiledata)) != 0;
 			ControlWindowEnable = (value & (1 << bitControlWindowEnable)) != 0;
@@ -215,6 +221,8 @@ internal sealed class PPU
 		if (dot % 456 == 1)
 			windowConditionY = LcdY == WindowY;
 		
+		var objHeight = ControlObjSize ? 16 : 8;
+
 		if (dot % 456 == 80)
 		{
 			selectedObjsCount = 0;
@@ -223,7 +231,7 @@ internal sealed class PPU
 			{
 				var y = dmg.Bus[(ushort)(0xFE00 + i * 4)] - 16;
 
-				if (y > LcdY || y + 8 <= LcdY)
+				if (y > LcdY || y + objHeight <= LcdY)
 					continue;
 
 				selectedObjs[selectedObjsCount] = i;
@@ -297,7 +305,9 @@ internal sealed class PPU
 		var tiledata = ControlTiledata ? 0x8000 : 0x9000;
 
 		WindowOffX = 0;
-		
+
+		var objHeight = ControlObjSize ? 16 : 8;
+
 		for (var x = 0; x < 160; x++)
 		{
 			if (!windowActive && windowConditionY && x == WindowX - 7 && ControlWindowEnable)
@@ -345,7 +355,7 @@ internal sealed class PPU
 					tileCol = 7 - tileCol;
 
 				if (yFlip)
-					tileRow = 7 - tileRow;
+					tileRow = objHeight - 1 - tileRow;
 
 				var tileOffset = tileIndex * 16;
 				var rowOffset = tileRow * 2;

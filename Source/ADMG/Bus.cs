@@ -30,6 +30,7 @@ internal sealed class Bus
 			0xFF07 => dmg.Timer.Control,
 			0xFF0F => dmg.InterruptController.Requested,
 			
+			0xFF10 => dmg.Apu.NR10,
 			0xFF11 => dmg.Apu.NR11,
 			0xFF12 => dmg.Apu.NR12,
 			0xFF14 => dmg.Apu.NR14,
@@ -79,6 +80,9 @@ internal sealed class Bus
 					break;
 				case 0xFF0F:
 					dmg.InterruptController.Requested = value;
+					break;
+				case 0xFF10:
+					dmg.Apu.NR10 = value;
 					break;
 				case 0xFF11:
 					dmg.Apu.NR11 = value;
