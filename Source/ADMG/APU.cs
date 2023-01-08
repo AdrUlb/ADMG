@@ -12,7 +12,7 @@ public sealed class APU : IAudioSource, IDisposable
 
 	public ushort Channels => 1;
 
-	public uint SampleRate => 44100;
+	public uint SampleRate => 44151;
 
 	public uint BytesPerSecond => (uint)(BitsPerSample / 8 * Channels * SampleRate);
 
@@ -225,7 +225,6 @@ public sealed class APU : IAudioSource, IDisposable
 		{
 			fsWait = 0;
 
-			// Length control
 			if (fsClock % 2 == 0)
 			{
 				if (EnableChannel1Length && Channel1LengthTimer > 0)
@@ -277,7 +276,7 @@ public sealed class APU : IAudioSource, IDisposable
 
 		{
 			short amplitude = 0;
-			
+
 			if (EnableChannel2)
 				amplitude = (short)(2000 * ((waveDutyTable[Channel2Duty] >> (7 - channel2DutyCycle)) & 1));
 			channel2Amplitudes[ampI] = amplitude;
@@ -287,17 +286,19 @@ public sealed class APU : IAudioSource, IDisposable
 
 		if (ampI == ampsPerSample)
 		{
+			var last = ampI - 1;
 			ampI = 0;
 
 			short sample = 0;
 
 			{
 				if (EnableChannel1)
-					sample += channel1Amplitudes[^1];
+					sample += channel1Amplitudes[last];
 
 				if (EnableChannel2)
-					sample += channel2Amplitudes[^1];
+					sample += channel2Amplitudes[last];
 			}
+			
 			playbackQueue.Enqueue(sample);
 		}
 	}
@@ -310,9 +311,11 @@ public sealed class APU : IAudioSource, IDisposable
 
 		while (i < buffer.Length / 2)
 		{
-			//if (!playbackQueue.TryDequeue(out sample)){}
+			sample *= 2;
 			if (playbackQueue.TryDequeue(out var nextSample))
 				sample = (short)(nextSample * 2);
+			//else
+			//	sample = 0;
 
 			var lo = (byte)sample;
 			var hi = (byte)(sample >> 8);
