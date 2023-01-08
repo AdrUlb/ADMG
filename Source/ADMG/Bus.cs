@@ -40,6 +40,8 @@ internal sealed class Bus
 			0xFF1A => dmg.Apu.NR30,
 			0xFF1C => dmg.Apu.NR32,
 			0xFF1E => dmg.Apu.NR34,
+			0xFF21 => dmg.Apu.NR42,
+			0xFF22 => dmg.Apu.NR43,
 			0xFF23 => dmg.Apu.NR44,
 			0xFF26 => dmg.Apu.NR52,
 			>= 0xFF30 and < 0xFF40 => dmg.Apu.WaveRam[address - 0xFF30],
@@ -124,6 +126,18 @@ internal sealed class Bus
 					break;
 				case 0xFF1E:
 					dmg.Apu.NR34 = value;
+					break;
+				case 0xFF20:
+					dmg.Apu.NR41 = value;
+					break;
+				case 0xFF21:
+					dmg.Apu.NR42 = value;
+					break;
+				case 0xFF22:
+					dmg.Apu.NR43 = value;
+					break;
+				case 0xFF23:
+					dmg.Apu.NR44 = value;
 					break;
 				case 0xFF26:
 					dmg.Apu.NR52 = value;
