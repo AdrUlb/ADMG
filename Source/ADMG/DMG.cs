@@ -30,8 +30,8 @@ internal sealed class DMG : IDisposable
 	{
 		Display = new("ADMG", 160, 144, 2);
 		VramWindow = new("ADMG Tile Viewer", 16 * 8, 24 * 8, 2);
-		Cartridge = new(File.ReadAllBytes("/home/adrian/Roms/GB/tetris.gb"));
-		//Cartridge = new(File.ReadAllBytes("Roms/blargg/cpu_instrs/cpu_instrs.gb"));
+		//Cartridge = new(File.ReadAllBytes("/home/adrian/Roms/GB/tetris.gb"));
+		Cartridge = new(File.ReadAllBytes("Roms/blargg/instr_timing.gb"));
 		InterruptController = new();
 		Joypad = new(InterruptController);
 		Bus = new(this);
@@ -78,12 +78,14 @@ internal sealed class DMG : IDisposable
 			
 			while (cycles < cyclesPerFrame)
 			{
+				Timer.Cycle();
+				
+				Ppu.Cycle();
+				Apu.Tick();
+				
 				if (cycles % cpuClockDivider == 0)
 					cpu.Cycle();
 
-				Ppu.Cycle();
-				Timer.Cycle();
-				Apu.Tick();
 				cycles++;
 			}
 

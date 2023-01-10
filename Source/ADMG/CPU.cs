@@ -1090,7 +1090,9 @@ internal sealed class CPU
 							case 2:
 								readLo = bus[RegPC++];
 								if ((Reg8Id)(readLo & 0b111) != Reg8Id.MHL)
+								{
 									goto case 3;
+								}
 								break;
 							case 3:
 								readHi = GetReg8((Reg8Id)(readLo & 0b111));

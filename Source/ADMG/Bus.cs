@@ -25,7 +25,7 @@ internal sealed class Bus
 			< 0x8000 => dmg.Cartridge[address],
 			0xFF00 => dmg.Joypad.Control,
 			0xFF04 => dmg.Timer.Divider,
-			0xFF05 => dmg.Timer.Counter,
+			0xFF05 => (byte)dmg.Timer.Counter,
 			0xFF06 => dmg.Timer.Modulo,
 			0xFF07 => dmg.Timer.Control,
 			0xFF0F => dmg.InterruptController.Requested,

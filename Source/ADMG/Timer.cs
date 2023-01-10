@@ -5,21 +5,22 @@ namespace ADMG;
 internal sealed class Timer
 {
 	private readonly DMG dmg;
-	
+
 	public byte Divider;
-	public byte Counter;
+	public int Counter;
 	public byte Modulo;
-	
+
 	public bool Enabled;
 	public int Clock = 1024;
 
-	private int cycles = 0;
-
+	private int tacTicks = 0;
+	private int divTicks = 0;
+	
 	public Timer(DMG dmg)
 	{
 		this.dmg = dmg;
 	}
-	
+
 	public byte Control
 	{
 		get
@@ -28,7 +29,7 @@ internal sealed class Timer
 
 			if (Enabled)
 				value |= 1 << 2;
-			
+
 			switch (Clock)
 			{
 				case 16:
@@ -41,37 +42,43 @@ internal sealed class Timer
 					value |= 3;
 					break;
 			}
-			
+
 			return value;
 		}
 
 		set
 		{
 			Enabled = (value & (1 << 2)) != 0;
-			
+
 			Clock = (value & 0b11) switch
 			{
-				0 => 1024,
-				1 => 16,
-				2 => 64,
-				3 => 256,
+				0b00 => 1024,
+				0b01 => 16,
+				0b10 => 64,
+				0b11 => 256,
 				_ => throw new UnreachableException()
 			};
 		}
 	}
-	
+
 	public void Cycle()
 	{
-		cycles++;
+		divTicks++;
 
-		if (cycles % 256 == 0)
-			Divider++;
-
-		if (cycles % Clock == 0 && Enabled)
+		if (divTicks >= 256)
 		{
+			divTicks = 0;
+			Divider++;
+		}
+
+		tacTicks++;
+
+		if (Enabled && tacTicks >= Clock)
+		{
+			tacTicks = 0;
 			Counter++;
 
-			if (Counter == 0)
+			if (Counter > 0xFF)
 			{
 				Counter = Modulo;
 				dmg.InterruptController.RequestTimer = true;
