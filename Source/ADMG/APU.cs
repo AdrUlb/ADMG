@@ -539,7 +539,7 @@ public sealed class APU : IAudioSource, IDisposable
 
 			if (fsClock == 7)
 			{
-				if (channel1EnvelopeSweepPace != 0 && channel1EnvelopeSweepTimer != 0)
+				if (channel1EnvelopeSweepPace != 0)
 				{
 					channel1EnvelopeSweepTimer--;
 
@@ -560,7 +560,7 @@ public sealed class APU : IAudioSource, IDisposable
 					}
 				}
 
-				if (channel2EnvelopeSweepPace != 0 && channel2EnvelopeSweepTimer != 0)
+				if (channel2EnvelopeSweepPace != 0)
 				{
 					channel2EnvelopeSweepTimer--;
 
@@ -581,7 +581,7 @@ public sealed class APU : IAudioSource, IDisposable
 					}
 				}
 				
-				if (channel4EnvelopeSweepPace != 0 && channel4EnvelopeSweepTimer != 0)
+				if (channel4EnvelopeSweepPace != 0)
 				{
 					channel4EnvelopeSweepTimer--;
 
@@ -654,7 +654,6 @@ public sealed class APU : IAudioSource, IDisposable
 				amplitude = (waveDutyTable[channel1Duty] >> (7 - channel1DutyCycle)) & 1;
 
 			amplitude *= channel1CurrentVolume;
-			amplitude -= 0x8000;
 			channel1Amplitudes[ampI] = (short)amplitude;
 		}
 
@@ -665,7 +664,6 @@ public sealed class APU : IAudioSource, IDisposable
 				amplitude = (waveDutyTable[channel2Duty] >> (7 - channel2DutyCycle)) & 1;
 
 			amplitude *= channel2CurrentVolume;
-			amplitude -= 0x8000;
 			channel2Amplitudes[ampI] = (short)amplitude;
 		}
 
@@ -713,7 +711,6 @@ public sealed class APU : IAudioSource, IDisposable
 			}
 
 			amplitude *= channel4CurrentVolume;
-			amplitude -= 0x8000;
 			channel4Amplitudes[ampI] = (short)amplitude;
 		}
 
