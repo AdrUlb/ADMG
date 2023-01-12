@@ -31,9 +31,9 @@ internal sealed class DMG : IDisposable
 	
 	public DMG()
 	{
-		//romFilePath = "/home/adrian/Roms/GB/pokered.gb";
-		//romFilePath = "/home/adrian/Downloads/gb-test-roms-master/dmg_sound/rom_singles/01-registers.gb";
-		romFilePath = "Roms/blargg/instr_timing.gb";
+		romFilePath = "/home/adrian/Roms/GB/tetris.gb";
+		//romFilePath = "/home/adrian/Downloads/gb-test-roms-master/dmg_sound/rom_singles/09-wave read while on.gb";
+		//romFilePath = "Roms/blargg/dmg_sound.gb";
 		
 		Display = new("ADMG", 160, 144, 2);
 		VramWindow = new("ADMG Tile Viewer", 16 * 8, 24 * 8, 2);
@@ -64,8 +64,6 @@ internal sealed class DMG : IDisposable
 		const int cyclesPerSecond = 4194304; // ~4MHz
 		const long cyclesPerFrame = cyclesPerSecond / framesPerSecond;
 
-		const int cpuClockDivider = 4; // CPU runs at 1/4 of the base clock
-		
 		var lastTime = Stopwatch.GetTimestamp();
 
 		if (File.Exists(ramFilePath))
@@ -107,7 +105,6 @@ internal sealed class DMG : IDisposable
 
 			long thisTime;
 
-			//Console.WriteLine(Stopwatch.GetElapsedTime(lastTime).TotalMilliseconds);
 			do
 			{
 				thisTime = Stopwatch.GetTimestamp();

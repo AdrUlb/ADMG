@@ -10,12 +10,11 @@ namespace ADMG;
 
 public sealed class APU : IAudioSource, IDisposable
 {
-
-	public string Name => "GameBoy APU";
+	public string Name => "ADMG";
 
 	public ushort Channels => 1;
 
-	public uint SampleRate => 44151;
+	public uint SampleRate => 44150;
 
 	public uint BytesPerSecond => (uint)(BitsPerSample / 8 * Channels * SampleRate);
 
@@ -25,103 +24,126 @@ public sealed class APU : IAudioSource, IDisposable
 
 	public float Volume { get; set; }
 
-	private const int bitEnableChannel1 = 0;
-	private const int bitEnableChannel2 = 1;
-	private const int bitEnableChannel3 = 2;
-	private const int bitEnableChannel4 = 3;
-	private const int bitEnabled = 7;
+	private readonly AudioPlayer? player;
 
-	private bool enabled = true;
+	private readonly ConcurrentQueue<short> playbackQueue = new();
 
-	private bool channel1Enable = false;
-	private bool enableChannel1Length = false;
-	private ushort channel1WaveLength = 0;
-	private int channel1Duty = 0;
-	private int channel1LengthTimer = 0;
-	private int channel1InitialVolume = 0;
+	private bool apuEnabled = false;
+
+	private bool channel1DacEnabled = false;
+	private bool channel1Enabled = false;
+	private int channel1EnvelopeInitialVolume = 0;
 	private bool channel1EnvelopeDirection = false;
 	private int channel1EnvelopeSweepPace = 0;
-	private int channel1EnvelopeSweepTimer;
-	private int channel1CurrentVolume;
-	private int channel1SweepPace;
-	private bool channel1SweepDirection;
-	private int channel1SweepSlope;
+	private int channel1WaveDuty = 0;
+	private int channel1LengthTimer = 0;
+	private int channel1WaveLength = 0;
+	private bool channel1SoundLengthEnable = false;
+	private int channel1SweepPace = 0;
+	private bool channel1SweepDecreasing = false;
+	private int channel1SweepSlopeControl = 0;
+	private bool channel1SweepEnabled = false;
+	private int channel1ShadowFrequency = 0;
+	private int channel1SweepTimer = 0;
+	private bool channel1DisableOnNegToPos = false;
+	private int channel1EnvelopePeriodTimer = 0;
+	private int channel1EnvelopeCurrentVolume = 0;
 
-	private bool enableChannel2 = false;
-	private bool enableChannel2Length = false;
-	private ushort channel2WaveLength = 0;
-	private int channel2Duty = 0;
-	private int channel2LengthTimer = 0;
-	private int channel2InitialVolume = 0;
+	private bool channel2DacEnabled = false;
+	private bool channel2Enabled = false;
+	private int channel2EnvelopeInitialVolume = 0;
 	private bool channel2EnvelopeDirection = false;
 	private int channel2EnvelopeSweepPace = 0;
-	private int channel2EnvelopeSweepTimer;
-	private int channel2CurrentVolume;
+	private int channel2WaveDuty = 0;
+	private int channel2LengthTimer = 0;
+	private int channel2WaveLength = 0;
+	private bool channel2SoundLengthEnable = false;
+	private int channel2EnvelopePeriodTimer = 0;
+	private int channel2EnvelopeCurrentVolume = 0;
 
-	public bool EnableChannel3 { get; private set; } = false;
+	public bool Channel3DacEnabled { get; private set; } = false;
 
-	private bool enableChannel3Length = false;
-	private ushort channel3WaveLength = 0;
+	public bool Channel3Enabled { get; private set; } = false;
+
 	private int channel3LengthTimer = 0;
-	private bool channel3DacEnable;
-	private int channel3OutputLevel;
+	private int channel3OutputLevel = 0;
+	private int channel3WaveLength = 0;
+	private bool channel3SoundLengthEnable = false;
 
-	private bool enableChannel4 = false;
+	private bool channel4DacEnabled = false;
+	private bool channel4Enabled = false;
 	private int channel4LengthTimer = 0;
-	private int channel4InitialVolume = 0;
+	private int channel4EnvelopeInitialVolume = 0;
 	private bool channel4EnvelopeDirection = false;
 	private int channel4EnvelopeSweepPace = 0;
-	private int channel4EnvelopeSweepTimer;
-	private int channel4CurrentVolume;
-	private int channel4ClockShift;
-	private bool channel4LfsrWidth;
-	public int channel4ClockDivider;
-	private bool enableChannel4Length;
+	private bool channel4SoundLengthEnable = false;
+	private int channel4ClockShift = 0;
+	private bool channel4LfsrWidth = false;
+	private int channel4ClockDivider = 0;
+	private int channel4EnvelopePeriodTimer = 0;
+	private int channel4EnvelopeCurrentVolume = 0;
 
-	public bool MixChannel4Left = true;
-	public bool MixChannel3Left = true;
-	public bool MixChannel2Left = true;
-	public bool MixChannel1Left = true;
-	public bool MixChannel4Right = true;
-	public bool MixChannel3Right = true;
-	public bool MixChannel2Right = true;
-	public bool MixChannel1Right = true;
+	private bool mixVinLeft = false;
+	private int mixLeftVolume = 0;
+	private bool mixVinRight = false;
+	private int mixRightVolume = 0;
 
-	private byte nr10;
-	
+	private bool mixChannel4Left = false;
+	private bool mixChannel3Left = false;
+	private bool mixChannel2Left = false;
+	private bool mixChannel1Left = false;
+	private bool mixChannel4Right = false;
+	private bool mixChannel3Right = false;
+	private bool mixChannel2Right = false;
+	private bool mixChannel1Right = false;
+
 	public byte NR10
 	{
 		get
 		{
 			byte value = 0;
 
-			value |= (byte)((channel1SweepPace & 0b111) << 4);
-
-			if (channel1SweepDirection)
-				value |= 1 << 3;
-
-			value |= (byte)(channel1SweepSlope & 0b111);
-
 			value |= 1 << 7;
-			
+			value |= (byte)(channel1SweepPace << 4);
+			if (channel1SweepDecreasing)
+				value |= 1 << 3;
+			value |= (byte)channel1SweepSlopeControl;
+
 			return value;
 		}
 
 		set
 		{
+			if (!apuEnabled && value != 0)
+				return;
+
 			channel1SweepPace = (value >> 4) & 0b111;
-			channel1SweepDirection = (value & (1 << 3)) != 0;
-			channel1SweepSlope = value & 0b111;
+			var wasDecreasing = channel1SweepDecreasing;
+			channel1SweepDecreasing = (value & (1 << 3)) != 0;
+			if (channel1DisableOnNegToPos && wasDecreasing && !channel1SweepDecreasing)
+				channel1Enabled = false;
+			channel1SweepSlopeControl = value & 0b111;
 		}
 	}
 
 	public byte NR11
 	{
-		get => (byte)((channel1Duty & 0b11) << 6);
+		get
+		{
+			byte value = 0;
+
+			value |= (byte)(channel1WaveDuty << 6);
+			value |= 0b00111111;
+
+			return value;
+		}
 
 		set
 		{
-			channel1Duty = value >> 6;
+			if (!apuEnabled && value != 0)
+				return;
+
+			channel1WaveDuty = (value >> 6) & 0b11;
 			channel1LengthTimer = 64 - (value & 0b111111);
 		}
 	}
@@ -132,11 +154,9 @@ public sealed class APU : IAudioSource, IDisposable
 		{
 			byte value = 0;
 
-			value |= (byte)(channel1InitialVolume << 4);
-
+			value |= (byte)(channel1EnvelopeInitialVolume << 4);
 			if (channel1EnvelopeDirection)
 				value |= 1 << 3;
-
 			value |= (byte)channel1EnvelopeSweepPace;
 
 			return value;
@@ -144,15 +164,29 @@ public sealed class APU : IAudioSource, IDisposable
 
 		set
 		{
-			channel1InitialVolume = value >> 4;
+			if (!apuEnabled && value != 0)
+				return;
+
+			channel1EnvelopeInitialVolume = value >> 4;
 			channel1EnvelopeDirection = (value & (1 << 3)) != 0;
 			channel1EnvelopeSweepPace = value & 0b111;
+
+			channel1DacEnabled = (value & 0b11111000) != 0;
+
+			if (!channel1DacEnabled)
+				channel1Enabled = false;
 		}
 	}
 
 	public byte NR13
 	{
-		set => channel1WaveLength = (ushort)((channel1WaveLength & 0b0000011100000000) | value);
+		set
+		{
+			if (!apuEnabled && value != 0)
+				return;
+
+			channel1WaveLength = (channel1WaveLength & 0b11100000000) | value;
+		}
 	}
 
 	public byte NR14
@@ -161,43 +195,79 @@ public sealed class APU : IAudioSource, IDisposable
 		{
 			byte value = 0;
 
-			if (enableChannel1Length)
-				value |= (1 << 6);
+			if (channel1SoundLengthEnable)
+				value |= 1 << 6;
+
+			value |= 0b10111111;
 
 			return value;
 		}
 
 		set
 		{
-			channel1WaveLength = (ushort)((channel1WaveLength & 0xFF) | ((value & 0b111) << 8));
+			if (!apuEnabled && value != 0)
+				return;
 
-			// Trigger event
-			if ((value & (1 << 7)) != 0)
+			var lengthWasEnabled = channel1SoundLengthEnable;
+			channel1SoundLengthEnable = (value & (1 << 6)) != 0;
+
+			if (!lengthWasEnabled && channel1SoundLengthEnable && frameSequencerStep % 2 == 1 && channel1LengthTimer > 0)
 			{
-				channel1Enable = true;
-				
-				channel1SweepTimer = channel1SweepPace != 0 ? channel1SweepPace : 8;
-				channel1ShadowFrequency = channel1WaveLength;
-				channel1EnvelopeSweepTimer = channel1EnvelopeSweepPace;
-				
-				channel1SweepEnabled = channel1SweepPace != 0 || channel1SweepSlope != 0;
-				if (channel1SweepSlope != 0 && channel1WaveLength > 2047)
-					channel1Enable = false;
-				
-				channel1CurrentVolume = channel1InitialVolume;
+				channel1LengthTimer--;
+				if (channel1LengthTimer == 0)
+					channel1Enabled = false;
 			}
 
-			enableChannel1Length = (value & (1 << 6)) != 0;
+			channel1WaveLength = (channel1WaveLength & 0xFF) | ((value & 0b111) << 8);
+
+			if ((value & (1 << 7)) != 0)
+			{
+				if (channel1LengthTimer == 0)
+				{
+					channel1LengthTimer = 64;
+
+					if (channel1SoundLengthEnable && frameSequencerStep % 2 == 1)
+						channel1LengthTimer--;
+				}
+
+				channel1ShadowFrequency = channel1WaveLength;
+				channel1SweepTimer = channel1SweepPace != 0 ? channel1SweepPace : 8;
+
+				channel1SweepEnabled = channel1SweepPace != 0 || channel1SweepSlopeControl != 0;
+
+				channel1EnvelopePeriodTimer = channel1EnvelopeSweepPace;
+				channel1EnvelopeCurrentVolume = channel1EnvelopeInitialVolume;
+
+				if (channel1DacEnabled)
+				{
+					channel1Enabled = true;
+					channel1DisableOnNegToPos = false;
+				}
+
+				if (channel1SweepSlopeControl != 0)
+					Channel1CalculateNewFrequency();
+			}
 		}
 	}
 
 	public byte NR21
 	{
-		get => (byte)((channel2Duty & 0b11) << 6);
+		get
+		{
+			byte value = 0;
+
+			value |= (byte)(channel2WaveDuty << 6);
+			value |= 0b00111111;
+
+			return value;
+		}
 
 		set
 		{
-			channel2Duty = value >> 6;
+			if (!apuEnabled && value != 0)
+				return;
+
+			channel2WaveDuty = (value >> 6) & 0b11;
 			channel2LengthTimer = 64 - (value & 0b111111);
 		}
 	}
@@ -208,11 +278,9 @@ public sealed class APU : IAudioSource, IDisposable
 		{
 			byte value = 0;
 
-			value |= (byte)(channel2InitialVolume << 4);
-
+			value |= (byte)(channel2EnvelopeInitialVolume << 4);
 			if (channel2EnvelopeDirection)
 				value |= 1 << 3;
-
 			value |= (byte)channel2EnvelopeSweepPace;
 
 			return value;
@@ -220,15 +288,29 @@ public sealed class APU : IAudioSource, IDisposable
 
 		set
 		{
-			channel2InitialVolume = value >> 4;
+			if (!apuEnabled && value != 0)
+				return;
+
+			channel2EnvelopeInitialVolume = value >> 4;
 			channel2EnvelopeDirection = (value & (1 << 3)) != 0;
 			channel2EnvelopeSweepPace = value & 0b111;
+
+			channel2DacEnabled = (value & 0b11111000) != 0;
+
+			if (!channel2DacEnabled)
+				channel2Enabled = false;
 		}
 	}
 
 	public byte NR23
 	{
-		set => channel2WaveLength = (ushort)((channel2WaveLength & 0b0000011100000000) | value);
+		set
+		{
+			if (!apuEnabled && value != 0)
+				return;
+
+			channel2WaveLength = (channel2WaveLength & 0b11100000000) | value;
+		}
 	}
 
 	public byte NR24
@@ -237,25 +319,47 @@ public sealed class APU : IAudioSource, IDisposable
 		{
 			byte value = 0;
 
-			if (enableChannel2Length)
-				value |= (1 << 6);
+			if (channel2SoundLengthEnable)
+				value |= 1 << 6;
+
+			value |= 0b10111111;
 
 			return value;
 		}
 
 		set
 		{
-			channel2WaveLength = (ushort)((channel2WaveLength & 0xFF) | ((value & 0b111) << 8));
+			if (!apuEnabled && value != 0)
+				return;
 
-			// Trigger event
-			if ((value & (1 << 7)) != 0)
+			var lengthWasEnabled = channel2SoundLengthEnable;
+			channel2SoundLengthEnable = (value & (1 << 6)) != 0;
+
+			if (!lengthWasEnabled && channel2SoundLengthEnable && frameSequencerStep % 2 == 1 && channel2LengthTimer > 0)
 			{
-				channel2EnvelopeSweepTimer = channel2EnvelopeSweepPace;
-				channel2CurrentVolume = channel2InitialVolume;
-				enableChannel2 = true;
+				channel2LengthTimer--;
+				if (channel2LengthTimer == 0)
+					channel2Enabled = false;
 			}
 
-			enableChannel2Length = (value & (1 << 6)) != 0;
+			if ((value & (1 << 7)) != 0)
+			{
+				if (channel2LengthTimer == 0)
+				{
+					channel2LengthTimer = 64;
+
+					if (channel2SoundLengthEnable && frameSequencerStep % 2 == 1)
+						channel2LengthTimer--;
+				}
+
+				channel2EnvelopePeriodTimer = channel2EnvelopeSweepPace;
+				channel2EnvelopeCurrentVolume = channel2EnvelopeInitialVolume;
+
+				if (channel2DacEnabled)
+					channel2Enabled = true;
+			}
+
+			channel2WaveLength = (channel2WaveLength & 0xFF) | ((value & 0b111) << 8);
 		}
 	}
 
@@ -265,29 +369,66 @@ public sealed class APU : IAudioSource, IDisposable
 		{
 			byte value = 0;
 
-			if (channel3DacEnable)
+			if (Channel3DacEnabled)
 				value |= 1 << 7;
+
+			value |= 0b01111111;
 
 			return value;
 		}
 
-		set => channel3DacEnable = (value & (1 << 7)) != 0;
+		set
+		{
+			if (!apuEnabled && value != 0)
+				return;
+
+			Channel3DacEnabled = (value & (1 << 7)) != 0;
+			if (!Channel3DacEnabled)
+				Channel3Enabled = false;
+		}
 	}
 
 	public byte NR31
 	{
-		set => channel3LengthTimer = 256 - value;
+		set
+		{
+			if (!apuEnabled && value != 0)
+				return;
+
+			channel3LengthTimer = 256 - value;
+		}
 	}
 
 	public byte NR32
 	{
-		get => (byte)(channel3OutputLevel << 5);
-		set => channel3OutputLevel = (value >> 5) & 0b11;
+		get
+		{
+			byte value = 0;
+
+			value |= (byte)(channel3OutputLevel << 5);
+			value |= 0b10011111;
+
+			return value;
+		}
+
+		set
+		{
+			if (!apuEnabled && value != 0)
+				return;
+
+			channel3OutputLevel = (value >> 5) & 0b11;
+		}
 	}
 
 	public byte NR33
 	{
-		set => channel3WaveLength = (ushort)((channel3WaveLength & 0b0000011100000000) | value);
+		set
+		{
+			if (!apuEnabled && value != 0)
+				return;
+
+			channel3WaveLength = (channel3WaveLength & 0b11100000000) | value;
+		}
 	}
 
 	public byte NR34
@@ -296,28 +437,55 @@ public sealed class APU : IAudioSource, IDisposable
 		{
 			byte value = 0;
 
-			if (enableChannel3Length)
-				value |= (1 << 6);
+			if (channel3SoundLengthEnable)
+				value |= 1 << 6;
+			value |= 0b10111111;
 
 			return value;
 		}
 
 		set
 		{
-			channel3WaveLength = (ushort)((channel3WaveLength & 0xFF) | ((value & 0b111) << 8));
+			if (!apuEnabled && value != 0)
+				return;
+
+			var lengthWasEnabled = channel3SoundLengthEnable;
+			channel3SoundLengthEnable = (value & (1 << 6)) != 0;
+
+			if (!lengthWasEnabled && channel3SoundLengthEnable && frameSequencerStep % 2 == 1 && channel3LengthTimer > 0)
+			{
+				channel3LengthTimer--;
+				if (channel3LengthTimer == 0)
+					Channel3Enabled = false;
+			}
 
 			if ((value & (1 << 7)) != 0)
 			{
-				EnableChannel3 = true;
+				if (channel3LengthTimer == 0)
+				{
+					channel3LengthTimer = 256;
+
+					if (channel3SoundLengthEnable && frameSequencerStep % 2 == 1)
+						channel3LengthTimer--;
+				}
+
+				if (Channel3DacEnabled)
+					Channel3Enabled = true;
 			}
 
-			enableChannel3Length = (value & (1 << 6)) != 0;
+			channel3WaveLength = (channel3WaveLength & 0xFF) | ((value & 0b111) << 8);
 		}
 	}
 
 	public byte NR41
 	{
-		set => channel4LengthTimer = 64 - (value & 0b111111);
+		set
+		{
+			if (!apuEnabled && value != 0)
+				return;
+
+			channel4LengthTimer = 64 - (value & 0b111111);
+		}
 	}
 
 	public byte NR42
@@ -326,11 +494,9 @@ public sealed class APU : IAudioSource, IDisposable
 		{
 			byte value = 0;
 
-			value |= (byte)(channel4InitialVolume << 4);
-
+			value |= (byte)(channel4EnvelopeInitialVolume << 4);
 			if (channel4EnvelopeDirection)
 				value |= 1 << 3;
-
 			value |= (byte)channel4EnvelopeSweepPace;
 
 			return value;
@@ -338,10 +504,17 @@ public sealed class APU : IAudioSource, IDisposable
 
 		set
 		{
-			channel4InitialVolume = value >> 4;
-			channel4CurrentVolume = channel4InitialVolume;
+			if (!apuEnabled && value != 0)
+				return;
+
+			channel4EnvelopeInitialVolume = value >> 4;
 			channel4EnvelopeDirection = (value & (1 << 3)) != 0;
 			channel4EnvelopeSweepPace = value & 0b111;
+
+			channel4DacEnabled = (value & 0b11111000) != 0;
+
+			if (!channel4DacEnabled)
+				channel4Enabled = false;
 		}
 	}
 
@@ -352,17 +525,18 @@ public sealed class APU : IAudioSource, IDisposable
 			byte value = 0;
 
 			value |= (byte)(channel4ClockShift << 4);
-
 			if (channel4LfsrWidth)
 				value |= 1 << 3;
-
-			value |= (byte)channel4ClockDivider;
+			value |= (byte)(channel4ClockDivider);
 
 			return value;
 		}
 
 		set
 		{
+			if (!apuEnabled && value != 0)
+				return;
+
 			channel4ClockShift = value >> 4;
 			channel4LfsrWidth = (value & (1 << 3)) != 0;
 			channel4ClockDivider = value & 0b111;
@@ -375,24 +549,79 @@ public sealed class APU : IAudioSource, IDisposable
 		{
 			byte value = 0;
 
-			if (enableChannel4Length)
-				value |= (1 << 6);
+			if (channel4SoundLengthEnable)
+				value |= 1 << 6;
+			value |= 0b10111111;
 
 			return value;
 		}
 
 		set
 		{
-			// Trigger event
+			if (!apuEnabled && value != 0)
+				return;
+
+			var lengthWasEnabled = channel4SoundLengthEnable;
+			channel4SoundLengthEnable = (value & (1 << 6)) != 0;
+
+			if (!lengthWasEnabled && channel4SoundLengthEnable && frameSequencerStep % 2 == 1 && channel4LengthTimer > 0)
+			{
+				channel4LengthTimer--;
+				if (channel4LengthTimer == 0)
+					channel4Enabled = false;
+			}
+
 			if ((value & (1 << 7)) != 0)
 			{
-				channel4EnvelopeSweepTimer = channel4EnvelopeSweepPace;
-				channel4CurrentVolume = channel4InitialVolume;
-				enableChannel4 = true;
-				channel4Lfsr = 0b1111_1111_1111_111;
+				if (channel4LengthTimer == 0)
+				{
+					channel4LengthTimer = 64;
+
+					if (channel4SoundLengthEnable && frameSequencerStep % 2 == 1)
+						channel4LengthTimer--;
+				}
+
+				if (channel4DacEnabled)
+					channel4Enabled = true;
+
+				channel4EnvelopePeriodTimer = channel4EnvelopeSweepPace;
+				channel4EnvelopeCurrentVolume = channel4EnvelopeInitialVolume;
+				
+				channel4Lfsr = 0b111_1111_1111_1111;
 			}
-			
-			enableChannel4Length = (value & (1 << 6)) != 0;
+
+			channel4SoundLengthEnable = (value & (1 << 6)) != 0;
+		}
+	}
+
+	public byte NR50
+	{
+		get
+		{
+			byte value = 0;
+
+			if (mixVinLeft)
+				value |= 1 << 7;
+
+			value |= (byte)(mixLeftVolume << 4);
+
+			if (mixVinRight)
+				value |= 1 << 3;
+
+			value |= (byte)mixRightVolume;
+
+			return value;
+		}
+
+		set
+		{
+			if (!apuEnabled && value != 0)
+				return;
+
+			mixVinLeft = (value & (1 << 7)) != 0;
+			mixLeftVolume = (value >> 4) & 0b111;
+			mixVinRight = (value & (1 << 3)) != 0;
+			mixRightVolume = value & 0b111;
 		}
 	}
 
@@ -402,28 +631,28 @@ public sealed class APU : IAudioSource, IDisposable
 		{
 			byte value = 0;
 
-			if (MixChannel4Left)
+			if (mixChannel4Left)
 				value |= 1 << 7;
 
-			if (MixChannel3Left)
+			if (mixChannel3Left)
 				value |= 1 << 6;
 
-			if (MixChannel2Left)
+			if (mixChannel2Left)
 				value |= 1 << 5;
 
-			if (MixChannel1Left)
+			if (mixChannel1Left)
 				value |= 1 << 4;
 
-			if (MixChannel4Right)
+			if (mixChannel4Right)
 				value |= 1 << 3;
 
-			if (MixChannel3Right)
+			if (mixChannel3Right)
 				value |= 1 << 2;
 
-			if (MixChannel2Right)
+			if (mixChannel2Right)
 				value |= 1 << 1;
 
-			if (MixChannel1Right)
+			if (mixChannel1Right)
 				value |= 1 << 0;
 
 			return value;
@@ -431,14 +660,17 @@ public sealed class APU : IAudioSource, IDisposable
 
 		set
 		{
-			MixChannel4Left = (value & (1 << 7)) != 0;
-			MixChannel3Left = (value & (1 << 6)) != 0;
-			MixChannel2Left = (value & (1 << 5)) != 0;
-			MixChannel1Left = (value & (1 << 4)) != 0;
-			MixChannel4Right = (value & (1 << 3)) != 0;
-			MixChannel3Right = (value & (1 << 2)) != 0;
-			MixChannel2Right = (value & (1 << 1)) != 0;
-			MixChannel1Right = (value & (1 << 0)) != 0;
+			if (!apuEnabled && value != 0)
+				return;
+
+			mixChannel4Left = (value & (1 << 7)) != 0;
+			mixChannel3Left = (value & (1 << 6)) != 0;
+			mixChannel2Left = (value & (1 << 5)) != 0;
+			mixChannel1Left = (value & (1 << 4)) != 0;
+			mixChannel4Right = (value & (1 << 3)) != 0;
+			mixChannel3Right = (value & (1 << 2)) != 0;
+			mixChannel2Right = (value & (1 << 1)) != 0;
+			mixChannel1Right = (value & (1 << 0)) != 0;
 		}
 	}
 
@@ -448,30 +680,59 @@ public sealed class APU : IAudioSource, IDisposable
 		{
 			byte value = 0;
 
-			if (channel1Enable)
-				value |= 1 << bitEnableChannel1;
+			if (apuEnabled)
+				value |= 1 << 7;
 
-			if (enableChannel2)
-				value |= 1 << bitEnableChannel2;
+			if (channel4Enabled)
+				value |= 1 << 3;
 
-			if (EnableChannel3)
-				value |= 1 << bitEnableChannel3;
+			if (Channel3Enabled)
+				value |= 1 << 2;
 
-			if (enableChannel4)
-				value |= 1 << bitEnableChannel4;
+			if (channel2Enabled)
+				value |= 1 << 1;
 
-			if (enabled)
-				value |= 1 << bitEnabled;
+			if (channel1Enabled)
+				value |= 1 << 0;
+
+			value |= 0b01110000;
 
 			return value;
 		}
 
-		set => enabled = (value & (1 << bitEnabled)) != 0;
+		set
+		{
+			var apuWasEnabled = apuEnabled;
+			apuEnabled = (value & (1 << 7)) != 0;
+
+			if (apuEnabled && !apuWasEnabled)
+				frameSequencerStep = 0;
+
+			if (!apuEnabled)
+			{
+				NR10 = 0;
+				NR11 = 0;
+				NR12 = 0;
+				NR13 = 0;
+				NR14 = 0;
+				NR21 = 0;
+				NR22 = 0;
+				NR23 = 0;
+				NR24 = 0;
+				NR30 = 0;
+				NR31 = 0;
+				NR32 = 0;
+				NR33 = 0;
+				NR34 = 0;
+				NR41 = 0;
+				NR42 = 0;
+				NR43 = 0;
+				NR44 = 0;
+				NR50 = 0;
+				NR51 = 0;
+			}
+		}
 	}
-
-	public readonly byte[] WaveRam = new byte[16];
-
-	//private short amplitude = 0;
 
 	private static readonly byte[] waveDutyTable =
 	{
@@ -481,35 +742,30 @@ public sealed class APU : IAudioSource, IDisposable
 		0b11111100
 	};
 
-	private const int ampsPerSample = 4194304 / 44100;
+	private const int ampsPerSample = 4194304 / 44150;
 
-	private int channel1DutyCycle = 0;
+	public byte[] WaveRam = new byte[16];
+
+	private int frameSequencerCounter = 0;
+	private int frameSequencerStep = 0;
+
 	private readonly short[] channel1Amplitudes = new short[ampsPerSample];
 	private int channel1FreqTimer = 0;
-	private bool channel1SweepEnabled;
-	private int channel1ShadowFrequency;
-	private int channel1SweepTimer;
+	private int channel1DutyCycle = 0;
 
-	private int channel2DutyCycle = 0;
 	private readonly short[] channel2Amplitudes = new short[ampsPerSample];
 	private int channel2FreqTimer = 0;
+	private int channel2DutyCycle = 0;
 
-	private int channel3WaveIndex = 0;
 	private readonly short[] channel3Amplitudes = new short[ampsPerSample];
 	private int channel3FreqTimer = 0;
+	private int channel3WaveIndex = 0;
 
 	private readonly short[] channel4Amplitudes = new short[ampsPerSample];
 	private int channel4FreqTimer = 0;
-	private int channel4Lfsr;
+	private int channel4Lfsr = 0;
 	
 	private int ampI = 0;
-
-	private readonly AudioPlayer? player;
-
-	private readonly ConcurrentQueue<short> playbackQueue = new();
-
-	private int fsWait = 0;
-	private int fsClock = 0;
 
 	public APU()
 	{
@@ -518,171 +774,175 @@ public sealed class APU : IAudioSource, IDisposable
 		player?.Play();
 	}
 
+	private int Channel1CalculateNewFrequency()
+	{
+		if (channel1SweepDecreasing)
+			channel1DisableOnNegToPos = true;
+
+		var freq = channel1ShadowFrequency >> channel1SweepSlopeControl;
+
+		if (channel1SweepDecreasing)
+			freq = channel1ShadowFrequency - freq;
+		else
+			freq = channel1ShadowFrequency + freq;
+
+		if (freq > 2047)
+			channel1Enabled = false;
+
+		return freq;
+	}
+
 	public void Tick()
 	{
-		fsWait++;
+		if (!apuEnabled)
+			return;
 
-		if (fsWait == 8192)
+		frameSequencerCounter++;
+
+		if (frameSequencerCounter == 8192)
 		{
-			fsWait = 0;
+			frameSequencerCounter = 0;
 
-			if (fsClock % 2 == 0)
+			// Length Ctr
+			if (frameSequencerStep % 2 == 0)
 			{
-				if (enableChannel1Length && channel1LengthTimer > 0)
+				if (channel1SoundLengthEnable && channel1LengthTimer > 0)
 				{
 					channel1LengthTimer--;
-					if (channel1LengthTimer <= 0)
-						channel1Enable = false;
+
+					if (channel1LengthTimer == 0)
+						channel1Enabled = false;
 				}
 
-				if (enableChannel2Length && channel2LengthTimer > 0)
+				if (channel2SoundLengthEnable && channel2LengthTimer > 0)
 				{
 					channel2LengthTimer--;
-					if (channel2LengthTimer <= 0)
-						enableChannel2 = false;
+
+					if (channel2LengthTimer == 0)
+						channel2Enabled = false;
 				}
 
-				if (enableChannel3Length && channel3LengthTimer > 0)
+				if (channel3SoundLengthEnable && channel3LengthTimer > 0)
 				{
 					channel3LengthTimer--;
-					if (channel3LengthTimer <= 0)
-						EnableChannel3 = false;
+
+					if (channel3LengthTimer == 0)
+						Channel3Enabled = false;
 				}
-				
-				if (enableChannel4Length && channel4LengthTimer > 0)
+
+				if (channel4SoundLengthEnable && channel4LengthTimer > 0)
 				{
 					channel4LengthTimer--;
-					if (channel4LengthTimer <= 0)
-						enableChannel4 = false;
+
+					if (channel4LengthTimer == 0)
+						channel4Enabled = false;
 				}
 			}
 
-			if (fsClock is 2 or 6)
+			// Sweep
+			if (frameSequencerStep is 2 or 6)
 			{
 				if (channel1SweepTimer > 0)
+				{
 					channel1SweepTimer--;
 
-				if (channel1SweepTimer == 0)
-				{
-					channel1SweepTimer = channel1SweepPace > 0 ? channel1SweepPace : 8;
-
-
-					if (channel1SweepEnabled && channel1SweepPace > 0)
+					if (channel1SweepTimer == 0)
 					{
-						var newFreq = CalculateFrequency();
+						channel1SweepTimer = channel1SweepPace != 0 ? channel1SweepPace : 8;
 
-						if (newFreq < 2048 && channel1SweepSlope > 0)
+						if (channel1SweepEnabled && channel1SweepPace != 0)
 						{
-							channel1WaveLength = (ushort)newFreq;
-							channel1ShadowFrequency = newFreq;
+							// Calculate new freq and perform overflow check
+							var newFrequency = Channel1CalculateNewFrequency();
 
-							// For overflow check
-							CalculateFrequency();
-						}
-
-						int CalculateFrequency()
-						{
-							var newFreq = channel1ShadowFrequency >> channel1SweepSlope;
-
-							if (channel1SweepDirection) // Sweep decrease
-								newFreq = channel1ShadowFrequency - newFreq;
-							else // Sweep increase
-								newFreq = channel1ShadowFrequency + newFreq;
-
-							if (newFreq > 2047)
-								channel1Enable = false;
-
-							return newFreq;
+							if (channel1WaveLength < 2048 && channel1SweepSlopeControl != 0)
+							{
+								channel1WaveLength = newFrequency;
+								channel1ShadowFrequency = newFrequency;
+								// Repeat the frequency calculation to repeat the overflow check
+								Channel1CalculateNewFrequency();
+							}
 						}
 					}
 				}
 			}
 
-			if (fsClock == 7)
+			// Envelope
+			if (frameSequencerStep == 7)
 			{
 				if (channel1EnvelopeSweepPace != 0)
 				{
-					channel1EnvelopeSweepTimer--;
+					if (channel1EnvelopePeriodTimer != 0)
+						channel1EnvelopePeriodTimer--;
 
-					if (channel1EnvelopeSweepTimer == 0)
+					if (channel1EnvelopePeriodTimer == 0)
 					{
-						channel1EnvelopeSweepTimer = channel1EnvelopeSweepPace;
+						channel1EnvelopePeriodTimer = channel1EnvelopeSweepPace;
 
-						if (channel1EnvelopeDirection) // Sweep increase
-						{
-							if (channel1CurrentVolume < 0xF)
-								channel1CurrentVolume++;
-						}
-						else // Sweep decrease
-						{
-							if (channel1CurrentVolume > 0)
-								channel1CurrentVolume--;
-						}
+						if (channel1EnvelopeCurrentVolume < 0xF && channel1EnvelopeDirection) // Increase
+							channel1EnvelopeCurrentVolume++;
+						else if (channel1EnvelopeCurrentVolume > 0 && !channel1EnvelopeDirection) // Decrease
+							channel1EnvelopeCurrentVolume--;
 					}
 				}
 
 				if (channel2EnvelopeSweepPace != 0)
 				{
-					channel2EnvelopeSweepTimer--;
+					if (channel2EnvelopePeriodTimer != 0)
+						channel2EnvelopePeriodTimer--;
 
-					if (channel2EnvelopeSweepTimer == 0)
+					if (channel2EnvelopePeriodTimer == 0)
 					{
-						channel2EnvelopeSweepTimer = channel2EnvelopeSweepPace;
+						channel2EnvelopePeriodTimer = channel2EnvelopeSweepPace;
 
-						if (channel1EnvelopeDirection) // Sweep increase
-						{
-							if (channel2CurrentVolume < 0xF)
-								channel2CurrentVolume++;
-						}
-						else // Sweep decrease
-						{
-							if (channel2CurrentVolume > 0)
-								channel2CurrentVolume--;
-						}
+						if (channel2EnvelopeCurrentVolume < 0xF && channel2EnvelopeDirection) // Increase
+							channel2EnvelopeCurrentVolume++;
+						else if (channel2EnvelopeCurrentVolume > 0 && !channel2EnvelopeDirection) // Decrease
+							channel2EnvelopeCurrentVolume--;
 					}
 				}
 				
 				if (channel4EnvelopeSweepPace != 0)
 				{
-					channel4EnvelopeSweepTimer--;
+					if (channel4EnvelopePeriodTimer != 0)
+						channel4EnvelopePeriodTimer--;
 
-					if (channel4EnvelopeSweepTimer == 0)
+					if (channel4EnvelopePeriodTimer == 0)
 					{
-						channel4EnvelopeSweepTimer = channel4EnvelopeSweepPace;
+						channel4EnvelopePeriodTimer = channel4EnvelopeSweepPace;
 
-						if (channel4EnvelopeDirection) // Sweep increase
-						{
-							if (channel4CurrentVolume < 0xF)
-								channel4CurrentVolume++;
-						}
-						else // Sweep decrease
-						{
-							if (channel4CurrentVolume > 0)
-								channel4CurrentVolume--;
-						}
+						if (channel4EnvelopeCurrentVolume < 0xF && channel4EnvelopeDirection) // Increase
+							channel4EnvelopeCurrentVolume++;
+						else if (channel4EnvelopeCurrentVolume > 0 && !channel4EnvelopeDirection) // Decrease
+							channel4EnvelopeCurrentVolume--;
 					}
 				}
 			}
 
-			fsClock++;
-			if (fsClock == 8)
-				fsClock = 0;
+			frameSequencerStep++;
+			frameSequencerStep %= 8;
 		}
 
 		if (channel1FreqTimer == 0)
 		{
 			channel1FreqTimer = (2048 - channel1WaveLength) * 4;
+
 			if (++channel1DutyCycle > 7)
+			{
 				channel1DutyCycle = 0;
+			}
 		}
 
 		if (channel2FreqTimer == 0)
 		{
 			channel2FreqTimer = (2048 - channel2WaveLength) * 4;
-			if (++channel2DutyCycle > 7)
-				channel2DutyCycle = 0;
-		}
 
+			if (++channel2DutyCycle > 7)
+			{
+				channel2DutyCycle = 0;
+			}
+		}
+		
 		if (channel3FreqTimer == 0)
 		{
 			channel3FreqTimer = (2048 - channel3WaveLength) * 2;
@@ -711,27 +971,31 @@ public sealed class APU : IAudioSource, IDisposable
 		{
 			var amplitude = 0;
 
-			if (channel1Enable)
-				amplitude = (waveDutyTable[channel1Duty] >> (7 - channel1DutyCycle)) & 1;
+			if (channel1Enabled)
+			{
+				amplitude = (waveDutyTable[channel1WaveDuty] >> (7 - channel1DutyCycle)) & 1;
+				amplitude *= channel1EnvelopeCurrentVolume;
+			}
 
-			amplitude *= channel1CurrentVolume;
 			channel1Amplitudes[ampI] = (short)amplitude;
 		}
 
 		{
 			var amplitude = 0;
 
-			if (enableChannel2)
-				amplitude = (waveDutyTable[channel2Duty] >> (7 - channel2DutyCycle)) & 1;
+			if (channel2Enabled)
+			{
+				amplitude = (waveDutyTable[channel2WaveDuty] >> (7 - channel2DutyCycle)) & 1;
+				amplitude *= channel2EnvelopeCurrentVolume;
+			}
 
-			amplitude *= channel2CurrentVolume;
 			channel2Amplitudes[ampI] = (short)amplitude;
 		}
 
 		{
 			short amplitude = 0;
 
-			if (EnableChannel3)
+			if (Channel3Enabled)
 			{
 				var waveRamIndex = channel3WaveIndex / 2;
 
@@ -766,12 +1030,12 @@ public sealed class APU : IAudioSource, IDisposable
 		{
 			var amplitude = 0;
 
-			if (enableChannel4)
+			if (channel4Enabled)
 			{
 				amplitude = ~channel4Lfsr & 1;
+				amplitude *= channel4EnvelopeCurrentVolume;
 			}
 
-			amplitude *= channel4CurrentVolume;
 			channel4Amplitudes[ampI] = (short)amplitude;
 		}
 
@@ -785,16 +1049,12 @@ public sealed class APU : IAudioSource, IDisposable
 			short sample = 0;
 
 			{
-				if (channel1Enable && (NR12 & 0xF8) != 0)
-					sample += channel1Amplitudes[last];
-				if (enableChannel2 && (NR22 & 0xF8) != 0)
-					sample += channel2Amplitudes[last];
-				if (EnableChannel3 && channel3DacEnable)
-					sample += channel3Amplitudes[last];
-				if (enableChannel4 && (NR42 & 0xF8) != 0)
-					sample += channel4Amplitudes[last];
+				sample += channel1Amplitudes[last];
+				sample += channel2Amplitudes[last];
+				sample += channel3Amplitudes[last];
+				sample += channel4Amplitudes[last];
 
-				sample *= 500;
+				sample *= 200;
 			}
 
 			playbackQueue.Enqueue(sample);

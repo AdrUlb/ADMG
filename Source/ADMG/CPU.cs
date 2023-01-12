@@ -31,22 +31,6 @@ internal sealed class CPU
 
 	private ushort read16 => (ushort)((readHi << 8) | readLo);
 
-	private readonly StreamWriter log;
-
-	public CPU(Bus bus, InterruptController interruptController)
-	{
-		log = new StreamWriter("log.txt");
-
-		this.bus = bus;
-		this.interruptController = interruptController;
-		/*RegBC = 0x0013;
-		RegDE = 0x00D8;
-		RegHL = 0x014D;
-		RegAF = 0x01B0;
-		RegSP = 0xFFFE;
-		RegPC = 0x0100;*/
-	}
-
 	private enum Reg16Id
 	{
 		BC = 0,
@@ -88,6 +72,18 @@ internal sealed class CPU
 		Carry
 	}
 
+	public CPU(Bus bus, InterruptController interruptController)
+	{
+		this.bus = bus;
+		this.interruptController = interruptController;
+		RegBC = 0x0013;
+		RegDE = 0x00D8;
+		RegHL = 0x014D;
+		RegAF = 0x01B0;
+		RegSP = 0xFFFE;
+		//RegPC = 0x0100;
+	}
+	
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private byte GetReg8(Reg8Id id) => id switch
 	{
@@ -263,8 +259,8 @@ internal sealed class CPU
 
 	public void Cycle()
 	{
-		//if (opCycle == 0)
-		//	log.WriteLine($"A:{GetReg8(Reg8Id.A):X2} F:{GetReg8(Reg8Id.F):X2} B:{GetReg8(Reg8Id.B):X2} C:{GetReg8(Reg8Id.C):X2} D:{GetReg8(Reg8Id.D):X2} E:{GetReg8(Reg8Id.E):X2} H:{GetReg8(Reg8Id.H):X2} L:{GetReg8(Reg8Id.L):X2} SP:{GetReg8(Reg8Id.SPHi):X2}{GetReg8(Reg8Id.SPLo):X2} PC:{RegPC:X4} PCMEM:{bus[RegPC]:X2},{bus[(ushort)(RegPC + 1)]:X2},{bus[(ushort)(RegPC + 2)]:X2},{bus[(ushort)(RegPC + 3)]:X2}");
+		//if (opCycle == 0 && trace)
+		//	Console.WriteLine($"A:{GetReg8(Reg8Id.A):X2} F:{GetReg8(Reg8Id.F):X2} B:{GetReg8(Reg8Id.B):X2} C:{GetReg8(Reg8Id.C):X2} D:{GetReg8(Reg8Id.D):X2} E:{GetReg8(Reg8Id.E):X2} H:{GetReg8(Reg8Id.H):X2} L:{GetReg8(Reg8Id.L):X2} SP:{GetReg8(Reg8Id.SPHi):X2}{GetReg8(Reg8Id.SPLo):X2} PC:{RegPC:X4} PCMEM:{bus[RegPC]:X2},{bus[(ushort)(RegPC + 1)]:X2},{bus[(ushort)(RegPC + 2)]:X2},{bus[(ushort)(RegPC + 3)]:X2}");
 
 		if (opCycle == 0 && !processedInts && (interruptController.Enabled & interruptController.Requested) != 0)
 		{
@@ -325,7 +321,7 @@ internal sealed class CPU
 		{
 			op = bus[RegPC++];
 		}
-		
+
 		var opX = op >> 6;
 
 		var opY = (op >> 3) & 0b111;
@@ -335,12 +331,12 @@ internal sealed class CPU
 
 		if (opCycle == 1)
 		{
-			//if (RegPC - 1 == 0x2803)
-			trace = true;
+			//if (RegPC - 1 == 0xC1E3)
+				//trace = true;
 
 			if (trace)
 			{
-				//Console.WriteLine($"0x{RegPC - 1:X4} 0x{op:X2} - AF:{RegAF:X4} BC:{RegBC:X4} DE:{RegDE:X4} HL:{RegHL:X4} SP:{RegSP:X4}");
+				Console.WriteLine($"0x{RegPC - 1:X4} 0x{op:X2} - AF:{RegAF:X4} BC:{RegBC:X4} DE:{RegDE:X4} HL:{RegHL:X4} SP:{RegSP:X4}");
 				//Console.ReadKey(true);
 			}
 		}
@@ -1086,6 +1082,7 @@ internal sealed class CPU
 						{
 							case 2:
 								readLo = bus[RegPC++];
+
 								if ((Reg8Id)(readLo & 0b111) != Reg8Id.MHL)
 								{
 									goto case 3;

@@ -33,20 +33,36 @@ internal sealed class Bus
 			0xFF10 => dmg.Apu.NR10,
 			0xFF11 => dmg.Apu.NR11,
 			0xFF12 => dmg.Apu.NR12,
+			0xFF13 => 0xFF,
 			0xFF14 => dmg.Apu.NR14,
+			0xFF15 => 0xFF,
 			0xFF16 => dmg.Apu.NR21,
 			0xFF17 => dmg.Apu.NR22,
+			0xFF18 => 0xFF,
 			0xFF19 => dmg.Apu.NR24,
 			0xFF1A => dmg.Apu.NR30,
+			0xFF1B => 0xFF,
 			0xFF1C => dmg.Apu.NR32,
+			0xFF1D => 0xFF,
 			0xFF1E => dmg.Apu.NR34,
+			0xFF1F => 0xFF,
+			0xFF20 => 0xFF,
 			0xFF21 => dmg.Apu.NR42,
 			0xFF22 => dmg.Apu.NR43,
 			0xFF23 => dmg.Apu.NR44,
-			//0xFF24 => dmg.Apu.NR50,
+			0xFF24 => dmg.Apu.NR50,
 			0xFF25 => dmg.Apu.NR51,
 			0xFF26 => dmg.Apu.NR52,
-			>= 0xFF30 and < 0xFF40 /*when !dmg.Apu.Channel3Enabled || !dmg.Apu.Channel3DacEnabled*/ => dmg.Apu.WaveRam[address - 0xFF30],
+			0xFF27 => 0xFF,
+			0xFF28 => 0xFF,
+			0xFF29 => 0xFF,
+			0xFF2A => 0xFF,
+			0xFF2B => 0xFF,
+			0xFF2C => 0xFF,
+			0xFF2D => 0xFF,
+			0xFF2E => 0xFF,
+			0xFF2F => 0xFF,
+			>= 0xFF30 and < 0xFF40 => dmg.Apu.WaveRam[address - 0xFF30],
 			0xFF40 => dmg.Ppu.Control,
 			0xFF41 => dmg.Ppu.Status,
 			0xFF42 => dmg.Ppu.ScrollY,
@@ -144,9 +160,9 @@ internal sealed class Bus
 				case 0xFF23:
 					dmg.Apu.NR44 = value;
 					break;
-				/*case 0xFF24:
+				case 0xFF24:
 					dmg.Apu.NR50 = value;
-					break;*/
+					break;
 				case 0xFF25:
 					dmg.Apu.NR51 = value;
 					break;
@@ -154,8 +170,7 @@ internal sealed class Bus
 					dmg.Apu.NR52 = value;
 					break;
 				case >= 0xFF30 and < 0xFF40:
-					//if (!dmg.Apu.Channel3Enabled || !dmg.Apu.Channel3DacEnabled)
-						dmg.Apu.WaveRam[address - 0xFF30] = value;
+					dmg.Apu.WaveRam[address - 0xFF30] = value;
 					break;
 				case 0xFF40:
 					dmg.Ppu.Control = value;
