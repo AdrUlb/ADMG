@@ -50,7 +50,7 @@ internal sealed class Cartridge
 				hasBattery = true;
 				break;
 			default:
-				throw new NotImplementedException("Controller 0x{data[0x147]:X2} not supported!");
+				throw new NotImplementedException($"Controller 0x{data[0x147]:X2} not supported!");
 		}
 
 		mbc = mbcId switch
@@ -65,6 +65,14 @@ internal sealed class Cartridge
 		Console.WriteLine($"Has RAM: {(hasRam ? "yes" : "no")}");
 		Console.WriteLine($"Has Battery: {(hasBattery ? "yes" : "no")}");
 	}
+
+	public void LoadRam(string ramFilePath) => mbc.LoadRam(ramFilePath);
+	
+	public void SaveRam(string ramFilePath) => mbc.SaveRam(ramFilePath);
+
+	public byte ReadRam(ushort address) => mbc.ReadRam(address);
+
+	public void WriteRam(ushort address, byte value) => mbc.WriteRam(address, value);
 
 	public byte this[ushort address]
 	{

@@ -23,13 +23,13 @@ internal sealed class Bus
 		{
 			< 0x0100 when disbaleBootrom == 0 => bootrom[address],
 			< 0x8000 => dmg.Cartridge[address],
+			>= 0xA000 and < 0xC000 => dmg.Cartridge.ReadRam(address),
 			0xFF00 => dmg.Joypad.Control,
 			0xFF04 => dmg.Timer.Divider,
-			0xFF05 => (byte)dmg.Timer.Counter,
+			0xFF05 => dmg.Timer.Counter,
 			0xFF06 => dmg.Timer.Modulo,
 			0xFF07 => dmg.Timer.Control,
 			0xFF0F => dmg.InterruptController.Requested,
-
 			0xFF10 => dmg.Apu.NR10,
 			0xFF11 => dmg.Apu.NR11,
 			0xFF12 => dmg.Apu.NR12,
@@ -43,8 +43,10 @@ internal sealed class Bus
 			0xFF21 => dmg.Apu.NR42,
 			0xFF22 => dmg.Apu.NR43,
 			0xFF23 => dmg.Apu.NR44,
+			//0xFF24 => dmg.Apu.NR50,
+			0xFF25 => dmg.Apu.NR51,
 			0xFF26 => dmg.Apu.NR52,
-			>= 0xFF30 and < 0xFF40 => dmg.Apu.WaveRam[address - 0xFF30],
+			>= 0xFF30 and < 0xFF40 /*when !dmg.Apu.Channel3Enabled || !dmg.Apu.Channel3DacEnabled*/ => dmg.Apu.WaveRam[address - 0xFF30],
 			0xFF40 => dmg.Ppu.Control,
 			0xFF41 => dmg.Ppu.Status,
 			0xFF42 => dmg.Ppu.ScrollY,
@@ -67,11 +69,14 @@ internal sealed class Bus
 				case <= 0x7FFF:
 					dmg.Cartridge[address] = value;
 					break;
+				case >= 0xA000 and < 0xC000:
+					dmg.Cartridge.WriteRam(address, value);
+					break;
 				case 0xFF00:
 					dmg.Joypad.Control = value;
 					break;
 				case 0xFF04:
-					dmg.Timer.Divider = 0;
+					dmg.Timer.ClkTimer = 0;
 					break;
 				case 0xFF05:
 					dmg.Timer.Counter = value;
@@ -139,11 +144,18 @@ internal sealed class Bus
 				case 0xFF23:
 					dmg.Apu.NR44 = value;
 					break;
+				/*case 0xFF24:
+					dmg.Apu.NR50 = value;
+					break;*/
+				case 0xFF25:
+					dmg.Apu.NR51 = value;
+					break;
 				case 0xFF26:
 					dmg.Apu.NR52 = value;
 					break;
 				case >= 0xFF30 and < 0xFF40:
-					dmg.Apu.WaveRam[address - 0xFF30] = value;
+					//if (!dmg.Apu.Channel3Enabled || !dmg.Apu.Channel3DacEnabled)
+						dmg.Apu.WaveRam[address - 0xFF30] = value;
 					break;
 				case 0xFF40:
 					dmg.Ppu.Control = value;

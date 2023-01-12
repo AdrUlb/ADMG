@@ -25,13 +25,19 @@ internal sealed class DMG : IDisposable
 	public readonly Timer Timer;
 	public readonly APU Apu;
 	private readonly CPU cpu;
+
+	private readonly string romFilePath;
+	
 	
 	public DMG()
 	{
+		//romFilePath = "/home/adrian/Roms/GB/pokered.gb";
+		//romFilePath = "/home/adrian/Downloads/gb-test-roms-master/dmg_sound/rom_singles/01-registers.gb";
+		romFilePath = "Roms/blargg/instr_timing.gb";
+		
 		Display = new("ADMG", 160, 144, 2);
 		VramWindow = new("ADMG Tile Viewer", 16 * 8, 24 * 8, 2);
-		//Cartridge = new(File.ReadAllBytes("/home/adrian/Roms/GB/tetris.gb"));
-		Cartridge = new(File.ReadAllBytes("Roms/blargg/instr_timing.gb"));
+		Cartridge = new(File.ReadAllBytes(romFilePath));
 		InterruptController = new();
 		Joypad = new(InterruptController);
 		Bus = new(this);
@@ -43,6 +49,8 @@ internal sealed class DMG : IDisposable
 
 	public void Start()
 	{
+		var ramFilePath = $"{Path.Combine(romFilePath, "..", Path.GetFileNameWithoutExtension(romFilePath))}.sav";
+		
 		/*VramWindow.TrySetDarkMode(true);
 		VramWindow.Visible = true;
 		VramWindow.Start();*/
@@ -60,6 +68,11 @@ internal sealed class DMG : IDisposable
 		
 		var lastTime = Stopwatch.GetTimestamp();
 
+		if (File.Exists(ramFilePath))
+			Cartridge.LoadRam(ramFilePath);
+
+		var cpuCycles = 0;
+		
 		while (Display.IsRunning)
 		{
 			Asfw.DoEvents();
@@ -78,15 +91,18 @@ internal sealed class DMG : IDisposable
 			
 			while (cycles < cyclesPerFrame)
 			{
-				Timer.Cycle();
+				cpuCycles++;
+				cycles++;
 				
 				Ppu.Cycle();
 				Apu.Tick();
-				
-				if (cycles % cpuClockDivider == 0)
-					cpu.Cycle();
+				Timer.Cycle();
 
-				cycles++;
+				if (cpuCycles >= 4)
+				{
+					cpuCycles = 0;
+					cpu.Cycle();
+				}
 			}
 
 			long thisTime;
@@ -99,6 +115,8 @@ internal sealed class DMG : IDisposable
 			while (thisTime - lastTime < ticksPerFrame);
 			lastTime = thisTime;
 		}
+
+		Cartridge.SaveRam(ramFilePath);
 	}
 
 	~DMG() => Dispose();

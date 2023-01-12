@@ -6,16 +6,17 @@ internal sealed class Timer
 {
 	private readonly DMG dmg;
 
-	public byte Divider;
-	public int Counter;
+	public ushort ClkTimer;
+
+	public byte Divider => (byte)(ClkTimer >> 8);
+	public byte Counter;
 	public byte Modulo;
 
 	public bool Enabled;
-	public int Clock = 1024;
+	private int clockIndex = 0b11;
 
 	private int tacTicks = 0;
-	private int divTicks = 0;
-	
+
 	public Timer(DMG dmg)
 	{
 		this.dmg = dmg;
@@ -30,18 +31,7 @@ internal sealed class Timer
 			if (Enabled)
 				value |= 1 << 2;
 
-			switch (Clock)
-			{
-				case 16:
-					value |= 1;
-					break;
-				case 64:
-					value |= 2;
-					break;
-				case 256:
-					value |= 3;
-					break;
-			}
+			value |= (byte)clockIndex;
 
 			return value;
 		}
@@ -49,39 +39,36 @@ internal sealed class Timer
 		set
 		{
 			Enabled = (value & (1 << 2)) != 0;
-
-			Clock = (value & 0b11) switch
-			{
-				0b00 => 1024,
-				0b01 => 16,
-				0b10 => 64,
-				0b11 => 256,
-				_ => throw new UnreachableException()
-			};
+			clockIndex = value & 0b11;
 		}
 	}
 
 	public void Cycle()
 	{
-		divTicks++;
-
-		if (divTicks >= 256)
+		var clock = clockIndex switch
 		{
-			divTicks = 0;
-			Divider++;
-		}
+			0b00 => 1024,
+			0b01 => 16,
+			0b10 => 64,
+			0b11 => 256,
+			_ => throw new UnreachableException()
+		};
 
+		ClkTimer++;
 		tacTicks++;
 
-		if (Enabled && tacTicks >= Clock)
+		if (Enabled)
 		{
-			tacTicks = 0;
-			Counter++;
-
-			if (Counter > 0xFF)
+			if (tacTicks >= clock)
 			{
-				Counter = Modulo;
-				dmg.InterruptController.RequestTimer = true;
+				tacTicks = 0;
+				Counter++;
+
+				if (Counter == 0)
+				{
+					Counter = Modulo;
+					dmg.InterruptController.RequestTimer = true;
+				}
 			}
 		}
 	}

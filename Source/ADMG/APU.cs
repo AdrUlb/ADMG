@@ -2,6 +2,7 @@
 
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using ASFW.Extension.Audio.Players;
 using ASFW.Extension.Audio.Sources;
 
@@ -32,7 +33,7 @@ public sealed class APU : IAudioSource, IDisposable
 
 	private bool enabled = true;
 
-	private bool enableChannel1 = false;
+	private bool channel1Enable = false;
 	private bool enableChannel1Length = false;
 	private ushort channel1WaveLength = 0;
 	private int channel1Duty = 0;
@@ -57,7 +58,8 @@ public sealed class APU : IAudioSource, IDisposable
 	private int channel2EnvelopeSweepTimer;
 	private int channel2CurrentVolume;
 
-	private bool enableChannel3 = false;
+	public bool EnableChannel3 { get; private set; } = false;
+
 	private bool enableChannel3Length = false;
 	private ushort channel3WaveLength = 0;
 	private int channel3LengthTimer = 0;
@@ -76,6 +78,17 @@ public sealed class APU : IAudioSource, IDisposable
 	public int channel4ClockDivider;
 	private bool enableChannel4Length;
 
+	public bool MixChannel4Left = true;
+	public bool MixChannel3Left = true;
+	public bool MixChannel2Left = true;
+	public bool MixChannel1Left = true;
+	public bool MixChannel4Right = true;
+	public bool MixChannel3Right = true;
+	public bool MixChannel2Right = true;
+	public bool MixChannel1Right = true;
+
+	private byte nr10;
+	
 	public byte NR10
 	{
 		get
@@ -85,10 +98,12 @@ public sealed class APU : IAudioSource, IDisposable
 			value |= (byte)((channel1SweepPace & 0b111) << 4);
 
 			if (channel1SweepDirection)
-				value |= (1 << 3);
+				value |= 1 << 3;
 
 			value |= (byte)(channel1SweepSlope & 0b111);
 
+			value |= 1 << 7;
+			
 			return value;
 		}
 
@@ -159,7 +174,7 @@ public sealed class APU : IAudioSource, IDisposable
 			// Trigger event
 			if ((value & (1 << 7)) != 0)
 			{
-				enableChannel1 = true;
+				channel1Enable = true;
 				
 				channel1SweepTimer = channel1SweepPace != 0 ? channel1SweepPace : 8;
 				channel1ShadowFrequency = channel1WaveLength;
@@ -167,7 +182,7 @@ public sealed class APU : IAudioSource, IDisposable
 				
 				channel1SweepEnabled = channel1SweepPace != 0 || channel1SweepSlope != 0;
 				if (channel1SweepSlope != 0 && channel1WaveLength > 2047)
-					enableChannel1 = false;
+					channel1Enable = false;
 				
 				channel1CurrentVolume = channel1InitialVolume;
 			}
@@ -293,7 +308,7 @@ public sealed class APU : IAudioSource, IDisposable
 
 			if ((value & (1 << 7)) != 0)
 			{
-				enableChannel3 = true;
+				EnableChannel3 = true;
 			}
 
 			enableChannel3Length = (value & (1 << 6)) != 0;
@@ -381,19 +396,65 @@ public sealed class APU : IAudioSource, IDisposable
 		}
 	}
 
+	public byte NR51
+	{
+		get
+		{
+			byte value = 0;
+
+			if (MixChannel4Left)
+				value |= 1 << 7;
+
+			if (MixChannel3Left)
+				value |= 1 << 6;
+
+			if (MixChannel2Left)
+				value |= 1 << 5;
+
+			if (MixChannel1Left)
+				value |= 1 << 4;
+
+			if (MixChannel4Right)
+				value |= 1 << 3;
+
+			if (MixChannel3Right)
+				value |= 1 << 2;
+
+			if (MixChannel2Right)
+				value |= 1 << 1;
+
+			if (MixChannel1Right)
+				value |= 1 << 0;
+
+			return value;
+		}
+
+		set
+		{
+			MixChannel4Left = (value & (1 << 7)) != 0;
+			MixChannel3Left = (value & (1 << 6)) != 0;
+			MixChannel2Left = (value & (1 << 5)) != 0;
+			MixChannel1Left = (value & (1 << 4)) != 0;
+			MixChannel4Right = (value & (1 << 3)) != 0;
+			MixChannel3Right = (value & (1 << 2)) != 0;
+			MixChannel2Right = (value & (1 << 1)) != 0;
+			MixChannel1Right = (value & (1 << 0)) != 0;
+		}
+	}
+
 	public byte NR52
 	{
 		get
 		{
 			byte value = 0;
 
-			if (enableChannel1)
+			if (channel1Enable)
 				value |= 1 << bitEnableChannel1;
 
 			if (enableChannel2)
 				value |= 1 << bitEnableChannel2;
 
-			if (enableChannel3)
+			if (EnableChannel3)
 				value |= 1 << bitEnableChannel3;
 
 			if (enableChannel4)
@@ -471,7 +532,7 @@ public sealed class APU : IAudioSource, IDisposable
 				{
 					channel1LengthTimer--;
 					if (channel1LengthTimer <= 0)
-						enableChannel1 = false;
+						channel1Enable = false;
 				}
 
 				if (enableChannel2Length && channel2LengthTimer > 0)
@@ -485,7 +546,7 @@ public sealed class APU : IAudioSource, IDisposable
 				{
 					channel3LengthTimer--;
 					if (channel3LengthTimer <= 0)
-						enableChannel3 = false;
+						EnableChannel3 = false;
 				}
 				
 				if (enableChannel4Length && channel4LengthTimer > 0)
@@ -529,7 +590,7 @@ public sealed class APU : IAudioSource, IDisposable
 								newFreq = channel1ShadowFrequency + newFreq;
 
 							if (newFreq > 2047)
-								enableChannel1 = false;
+								channel1Enable = false;
 
 							return newFreq;
 						}
@@ -650,7 +711,7 @@ public sealed class APU : IAudioSource, IDisposable
 		{
 			var amplitude = 0;
 
-			if (enableChannel1)
+			if (channel1Enable)
 				amplitude = (waveDutyTable[channel1Duty] >> (7 - channel1DutyCycle)) & 1;
 
 			amplitude *= channel1CurrentVolume;
@@ -670,7 +731,7 @@ public sealed class APU : IAudioSource, IDisposable
 		{
 			short amplitude = 0;
 
-			if (enableChannel3)
+			if (EnableChannel3)
 			{
 				var waveRamIndex = channel3WaveIndex / 2;
 
@@ -724,11 +785,11 @@ public sealed class APU : IAudioSource, IDisposable
 			short sample = 0;
 
 			{
-				if (enableChannel1 && (NR12 & 0xF8) != 0)
+				if (channel1Enable && (NR12 & 0xF8) != 0)
 					sample += channel1Amplitudes[last];
 				if (enableChannel2 && (NR22 & 0xF8) != 0)
 					sample += channel2Amplitudes[last];
-				if (enableChannel3 && channel3DacEnable)
+				if (EnableChannel3 && channel3DacEnable)
 					sample += channel3Amplitudes[last];
 				if (enableChannel4 && (NR42 & 0xF8) != 0)
 					sample += channel4Amplitudes[last];

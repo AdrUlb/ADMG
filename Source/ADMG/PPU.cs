@@ -299,6 +299,7 @@ internal sealed class PPU
 		}
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private void DrawLine()
 	{
 		var bgTilemap = ControlBgTilemap ? 0x9C00 : 0x9800;
@@ -419,7 +420,7 @@ internal sealed class PPU
 	private void DisplayFrame()
 	{
 		dmg.Display.Commit();
-
+		
 		for (var i = 0; i < 384; i++)
 		{
 			var tileOffset = i * 16;
@@ -443,7 +444,7 @@ internal sealed class PPU
 				}
 			}
 		}
+
 		dmg.VramWindow.Commit();
 	}
-
 }

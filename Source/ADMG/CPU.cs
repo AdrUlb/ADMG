@@ -325,7 +325,7 @@ internal sealed class CPU
 		{
 			op = bus[RegPC++];
 		}
-
+		
 		var opX = op >> 6;
 
 		var opY = (op >> 3) & 0b111;
@@ -579,25 +579,22 @@ internal sealed class CPU
 							{
 								var id = GetReg16LoId((Reg16Id)opP);
 								readHi = GetReg8(id);
-								// Skip over the operation that would increase the high byte if there was no overflow
-								if (readHi - 1 >= 0)
-									opCycle++;
 								readHi--;
 								SetReg8(id, readHi);
 								break;
 							}
 							case 2:
 							{
-								var id = GetReg16HiId((Reg16Id)opP);
-								readHi = GetReg8(id);
-								readHi--;
-								SetReg8(id, readHi);
+								if (readHi == 0xFF)
+								{
+									var id = GetReg16HiId((Reg16Id)opP);
+									readHi = GetReg8(id);
+									readHi--;
+									SetReg8(id, readHi);
+								}
 								opCycle = 0;
 								break;
 							}
-							case 3:
-								opCycle = 0;
-								break;
 						}
 						break;
 					default:
