@@ -14,7 +14,7 @@ public sealed class APU : IAudioSource, IDisposable
 
 	public ushort Channels => 1;
 
-	public uint SampleRate => 44150;
+	public uint SampleRate => 44151;
 
 	public uint BytesPerSecond => (uint)(BitsPerSample / 8 * Channels * SampleRate);
 
@@ -245,7 +245,10 @@ public sealed class APU : IAudioSource, IDisposable
 				}
 
 				if (channel1SweepSlopeControl != 0)
-					Channel1CalculateNewFrequency();
+				{
+					if (channel1WaveLength > 2047)
+						channel1Enabled = false;
+				}
 			}
 		}
 	}
@@ -843,25 +846,23 @@ public sealed class APU : IAudioSource, IDisposable
 			if (frameSequencerStep is 2 or 6)
 			{
 				if (channel1SweepTimer > 0)
-				{
 					channel1SweepTimer--;
+				
+				if (channel1SweepTimer == 0)
+				{
+					channel1SweepTimer = channel1SweepPace > 0 ? channel1SweepPace : 8;
 
-					if (channel1SweepTimer == 0)
+					if (channel1SweepEnabled && channel1SweepPace > 0)
 					{
-						channel1SweepTimer = channel1SweepPace != 0 ? channel1SweepPace : 8;
+						// Calculate new freq and perform overflow check
+						var newFrequency = Channel1CalculateNewFrequency();
 
-						if (channel1SweepEnabled && channel1SweepPace != 0)
+						if (channel1WaveLength < 2048 && channel1SweepSlopeControl > 0)
 						{
-							// Calculate new freq and perform overflow check
-							var newFrequency = Channel1CalculateNewFrequency();
-
-							if (channel1WaveLength < 2048 && channel1SweepSlopeControl != 0)
-							{
-								channel1WaveLength = newFrequency;
-								channel1ShadowFrequency = newFrequency;
-								// Repeat the frequency calculation to repeat the overflow check
-								Channel1CalculateNewFrequency();
-							}
+							channel1WaveLength = newFrequency;
+							channel1ShadowFrequency = newFrequency;
+							// Repeat the frequency calculation to repeat the overflow check
+							Channel1CalculateNewFrequency();
 						}
 					}
 				}
