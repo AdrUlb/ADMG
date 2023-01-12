@@ -14,7 +14,7 @@ public sealed class APU : IAudioSource, IDisposable
 
 	public ushort Channels => 1;
 
-	public uint SampleRate => 44151;
+	public uint SampleRate => 44152;
 
 	public uint BytesPerSecond => (uint)(BitsPerSample / 8 * Channels * SampleRate);
 
@@ -248,6 +248,7 @@ public sealed class APU : IAudioSource, IDisposable
 				{
 					if (channel1WaveLength > 2047)
 						channel1Enabled = false;
+					Channel1CalculateNewFrequency();
 				}
 			}
 		}
