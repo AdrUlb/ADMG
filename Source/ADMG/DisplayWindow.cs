@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Drawing;
+using System.Runtime.CompilerServices;
 using ASFW.Graphics;
 using ASFW.Platform.Desktop;
 using ASFW.Platform.Desktop.GLFW;
@@ -10,7 +11,7 @@ internal sealed class DisplayWindow : Window
 {
 	private readonly HashSet<KeyboardKey> keysDown = new();
 
-	private bool committed = false;
+	private volatile bool committed = false;
 
 	public IReadOnlySet<KeyboardKey> KeysDown => keysDown;
 
@@ -18,7 +19,7 @@ internal sealed class DisplayWindow : Window
 	private readonly Stopwatch frameTimer = Stopwatch.StartNew();
 	private readonly Color[] pixels;
 	private readonly Texture texture;
-
+	
 	public DisplayWindow(string title, int width, int height, int scale) : base(new()
 	{
 		Title = title,
@@ -30,13 +31,12 @@ internal sealed class DisplayWindow : Window
 		texture = new(width, height);
 	}
 
+	//[MethodImpl(MethodImplOptions.NoOptimization)]
 	protected override void OnRender()
 	{
-		while (!committed)
-		{
-			if (!IsRunning)
-				return;
-		}
+		if (!committed)
+			return;
+		
 		committed = false;
 
 		texture.Lock();

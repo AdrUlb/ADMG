@@ -372,11 +372,11 @@ internal sealed class PPU
 				pixel = (bit2 << 1) | bit1;
 				palette = objPalette ? ObjectPalette1 : ObjectPalette0;
 
-				if (pixel == 0)
-					continue;
-
 				hasObj = true;
 				prevObj = obj;
+				
+				if (pixel != 0)
+					break;
 			}
 
 			if (!hasObj || bgOverObj)

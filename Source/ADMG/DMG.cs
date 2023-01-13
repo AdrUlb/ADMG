@@ -31,7 +31,7 @@ internal sealed class DMG : IDisposable
 	
 	public DMG()
 	{
-		romFilePath = "/home/adrian/Roms/GB/sml.gb";
+		romFilePath = "/home/adrian/Roms/GB/tetris.gb";
 		//romFilePath = "/home/adrian/Downloads/gb-test-roms-master/dmg_sound/rom_singles/09-wave read while on.gb";
 		//romFilePath = "Roms/blargg/dmg_sound.gb";
 		
@@ -42,7 +42,7 @@ internal sealed class DMG : IDisposable
 		Joypad = new(InterruptController);
 		Bus = new(this);
 		Ppu = new(this);
-		Timer = new Timer(this);
+		Timer = new(this);
 		Apu = new();
 		cpu = new(Bus, InterruptController);
 	}

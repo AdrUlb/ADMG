@@ -1061,7 +1061,7 @@ public sealed class APU : IAudioSource, IDisposable
 				sample += channel3Amplitudes[last];
 				sample += channel4Amplitudes[last];
 
-				sample *= 200;
+				sample *= 300;
 			}
 
 			playbackQueue.Enqueue(sample);
