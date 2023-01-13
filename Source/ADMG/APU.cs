@@ -37,7 +37,12 @@ public sealed class APU : IAudioSource, IDisposable
 	private int channel1EnvelopeSweepPace = 0;
 	private int channel1WaveDuty = 0;
 	private int channel1LengthTimer = 0;
-	private int channel1WaveLength = 0;
+	private int channel1WaveLengthInternal = 0;
+	private int channel1WaveLength
+	{
+		get => channel1WaveLengthInternal & 0b111_11111111;
+		set => channel1WaveLengthInternal = value;
+	}
 	private bool channel1SoundLengthEnable = false;
 	private int channel1SweepPace = 0;
 	private bool channel1SweepDecreasing = false;
