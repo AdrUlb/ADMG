@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Drawing;
-using System.Runtime.CompilerServices;
 using ASFW.Graphics;
 using ASFW.Platform.Desktop;
 using ASFW.Platform.Desktop.GLFW;
@@ -11,7 +10,7 @@ internal sealed class DisplayWindow : Window
 {
 	private readonly HashSet<KeyboardKey> keysDown = new();
 
-	private volatile bool committed = false;
+	private bool committed = false;
 
 	public IReadOnlySet<KeyboardKey> KeysDown => keysDown;
 
@@ -31,7 +30,6 @@ internal sealed class DisplayWindow : Window
 		texture = new(width, height);
 	}
 
-	//[MethodImpl(MethodImplOptions.NoOptimization)]
 	protected override void OnRender()
 	{
 		if (!committed)
