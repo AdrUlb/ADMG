@@ -1059,63 +1059,35 @@ public sealed class APU : IAudioSource, IDisposable
 			int sampleRight = 0;
 
 			{
-				var channelsLeft = 0;
-				var channelsRight = 0;
 
 				if (mixChannel1Left)
-				{
 					sampleLeft += channel1Amps[last];
-					channelsLeft++;
-				}
 
 				if (mixChannel2Left)
-				{
 					sampleLeft += channel2Amps[last];
-					channelsLeft++;
-				}
 
 				if (mixChannel3Left)
-				{
 					sampleLeft += channel3Amps[last];
-					channelsLeft++;
-				}
 
 				if (mixChannel4Left)
-				{
 					sampleLeft += channel4Amps[last];
-					channelsLeft++;
-				}
 
 				if (mixChannel1Right)
-				{
 					sampleRight += channel1Amps[last];
-					channelsRight++;
-				}
 
 				if (mixChannel2Right)
-				{
 					sampleRight += channel2Amps[last];
-					channelsRight++;
-				}
 
 				if (mixChannel3Right)
-				{
 					sampleRight += channel3Amps[last];
-					channelsRight++;
-				}
 
 				if (mixChannel4Right)
-				{
 					sampleRight += channel4Amps[last];
-					channelsRight++;
-				}
 
 				sampleLeft *= mixLeftVolume;
 				sampleRight *= mixRightVolume;
 				sampleLeft *= 100;
 				sampleRight *= 100;
-				sampleLeft /= channelsLeft;
-				sampleRight /= channelsLeft;
 			}
 
 			playbackQueue.Enqueue(((short)sampleLeft, (short)sampleRight));
