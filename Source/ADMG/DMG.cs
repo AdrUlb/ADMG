@@ -31,7 +31,7 @@ internal sealed class DMG : IDisposable
 	
 	public DMG()
 	{
-		romFilePath = "/home/adrian/Roms/GB/pokered.gb";
+		romFilePath = "/home/adrian/Roms/GB/pre.gb";
 		//romFilePath = "/home/adrian/Downloads/gb-test-roms-master/dmg_sound/rom_singles/09-wave read while on.gb";
 		//romFilePath = "Roms/blargg/dmg_sound.gb";
 		

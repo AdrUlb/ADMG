@@ -50,6 +50,19 @@ internal sealed class Mbc1 : Mbc
 		ram[address] = value;
 	}
 
+	public override void LoadRam(string ramFilePath)
+	{
+		using var fs = File.OpenRead(ramFilePath);
+		fs.ReadExactly(ram);
+	}
+	
+	public override void SaveRam(string ramFilePath)
+	{
+		using var fs = File.OpenWrite(ramFilePath);
+		fs.Position = 0;
+		fs.Write(ram);
+	}
+
 	public override byte this[ushort address]
 	{
 		get
