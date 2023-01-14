@@ -12,7 +12,7 @@ public sealed class APU : IAudioSource, IDisposable
 {
 	public string Name => "ADMG";
 
-	public ushort Channels => 1;
+	public ushort Channels => 2;
 
 	public uint SampleRate => 44152;
 
@@ -26,7 +26,7 @@ public sealed class APU : IAudioSource, IDisposable
 
 	private readonly AudioPlayer? player;
 
-	private readonly ConcurrentQueue<short> playbackQueue = new();
+	private readonly ConcurrentQueue<(short Left, short Right)> playbackQueue = new();
 
 	private bool apuEnabled = false;
 
@@ -38,11 +38,13 @@ public sealed class APU : IAudioSource, IDisposable
 	private int channel1WaveDuty = 0;
 	private int channel1LengthTimer = 0;
 	private int channel1WaveLengthInternal = 0;
+
 	private int channel1WaveLength
 	{
 		get => channel1WaveLengthInternal & 0b111_11111111;
 		set => channel1WaveLengthInternal = value;
 	}
+
 	private bool channel1SoundLengthEnable = false;
 	private int channel1SweepPace = 0;
 	private bool channel1SweepDecreasing = false;
@@ -595,7 +597,7 @@ public sealed class APU : IAudioSource, IDisposable
 
 				channel4EnvelopePeriodTimer = channel4EnvelopeSweepPace;
 				channel4EnvelopeCurrentVolume = channel4EnvelopeInitialVolume;
-				
+
 				channel4Lfsr = 0b111_1111_1111_1111;
 			}
 
@@ -758,22 +760,22 @@ public sealed class APU : IAudioSource, IDisposable
 	private int frameSequencerCounter = 0;
 	private int frameSequencerStep = 0;
 
-	private readonly short[] channel1Amplitudes = new short[ampsPerSample];
+	private readonly short[] channel1Amps = new short[ampsPerSample];
 	private int channel1FreqTimer = 0;
 	private int channel1DutyCycle = 0;
 
-	private readonly short[] channel2Amplitudes = new short[ampsPerSample];
+	private readonly short[] channel2Amps = new short[ampsPerSample];
 	private int channel2FreqTimer = 0;
 	private int channel2DutyCycle = 0;
 
-	private readonly short[] channel3Amplitudes = new short[ampsPerSample];
+	private readonly short[] channel3Amps = new short[ampsPerSample];
 	private int channel3FreqTimer = 0;
 	private int channel3WaveIndex = 0;
 
-	private readonly short[] channel4Amplitudes = new short[ampsPerSample];
+	private readonly short[] channel4Amps = new short[ampsPerSample];
 	private int channel4FreqTimer = 0;
 	private int channel4Lfsr = 0;
-	
+
 	private int ampI = 0;
 
 	public APU()
@@ -853,7 +855,7 @@ public sealed class APU : IAudioSource, IDisposable
 			{
 				if (channel1SweepTimer > 0)
 					channel1SweepTimer--;
-				
+
 				if (channel1SweepTimer == 0)
 				{
 					channel1SweepTimer = channel1SweepPace > 0 ? channel1SweepPace : 8;
@@ -908,7 +910,7 @@ public sealed class APU : IAudioSource, IDisposable
 							channel2EnvelopeCurrentVolume--;
 					}
 				}
-				
+
 				if (channel4EnvelopeSweepPace != 0)
 				{
 					if (channel4EnvelopePeriodTimer != 0)
@@ -949,7 +951,7 @@ public sealed class APU : IAudioSource, IDisposable
 				channel2DutyCycle = 0;
 			}
 		}
-		
+
 		if (channel3FreqTimer == 0)
 		{
 			channel3FreqTimer = (2048 - channel3WaveLength) * 2;
@@ -984,7 +986,7 @@ public sealed class APU : IAudioSource, IDisposable
 				amplitude *= channel1EnvelopeCurrentVolume;
 			}
 
-			channel1Amplitudes[ampI] = (short)amplitude;
+			channel1Amps[ampI] = (short)amplitude;
 		}
 
 		{
@@ -996,7 +998,7 @@ public sealed class APU : IAudioSource, IDisposable
 				amplitude *= channel2EnvelopeCurrentVolume;
 			}
 
-			channel2Amplitudes[ampI] = (short)amplitude;
+			channel2Amps[ampI] = (short)amplitude;
 		}
 
 		{
@@ -1031,7 +1033,7 @@ public sealed class APU : IAudioSource, IDisposable
 				amplitude = (short)(sample - 8);
 			}
 
-			channel3Amplitudes[ampI] = amplitude;
+			channel3Amps[ampI] = amplitude;
 		}
 
 		{
@@ -1043,7 +1045,7 @@ public sealed class APU : IAudioSource, IDisposable
 				amplitude *= channel4EnvelopeCurrentVolume;
 			}
 
-			channel4Amplitudes[ampI] = (short)amplitude;
+			channel4Amps[ampI] = (short)amplitude;
 		}
 
 		ampI++;
@@ -1053,37 +1055,94 @@ public sealed class APU : IAudioSource, IDisposable
 			var last = ampI - 1;
 			ampI = 0;
 
-			short sample = 0;
+			int sampleLeft = 0;
+			int sampleRight = 0;
 
 			{
-				sample += channel1Amplitudes[last];
-				sample += channel2Amplitudes[last];
-				sample += channel3Amplitudes[last];
-				sample += channel4Amplitudes[last];
+				var channelsLeft = 0;
+				var channelsRight = 0;
 
-				sample *= 300;
+				if (mixChannel1Left)
+				{
+					sampleLeft += channel1Amps[last];
+					channelsLeft++;
+				}
+
+				if (mixChannel2Left)
+				{
+					sampleLeft += channel2Amps[last];
+					channelsLeft++;
+				}
+
+				if (mixChannel3Left)
+				{
+					sampleLeft += channel3Amps[last];
+					channelsLeft++;
+				}
+
+				if (mixChannel4Left)
+				{
+					sampleLeft += channel4Amps[last];
+					channelsLeft++;
+				}
+
+				if (mixChannel1Right)
+				{
+					sampleRight += channel1Amps[last];
+					channelsRight++;
+				}
+
+				if (mixChannel2Right)
+				{
+					sampleRight += channel2Amps[last];
+					channelsRight++;
+				}
+
+				if (mixChannel3Right)
+				{
+					sampleRight += channel3Amps[last];
+					channelsRight++;
+				}
+
+				if (mixChannel4Right)
+				{
+					sampleRight += channel4Amps[last];
+					channelsRight++;
+				}
+
+				sampleLeft *= mixLeftVolume;
+				sampleRight *= mixRightVolume;
+				sampleLeft *= 100;
+				sampleRight *= 100;
+				sampleLeft /= channelsLeft;
+				sampleRight /= channelsLeft;
 			}
 
-			playbackQueue.Enqueue(sample);
+			playbackQueue.Enqueue(((short)sampleLeft, (short)sampleRight));
 		}
 	}
 
-	private short sample = 0;
+	private (short Left, short Right) sample = (0, 0);
 
 	public int GetNextBlock(Span<byte> buffer, bool rewind = false)
 	{
 		var i = 0;
 
-		while (i < buffer.Length / 2)
+		while (i < buffer.Length / 4)
 		{
-			sample *= 2;
-			sample = playbackQueue.TryDequeue(out var nextSample) ? nextSample : (short)0;
+			sample = playbackQueue.TryDequeue(out var nextSample) ? nextSample : ((short)0, (short)0);
 
-			var lo = (byte)sample;
-			var hi = (byte)(sample >> 8);
+			var loL = (byte)sample.Left;
+			var hiL = (byte)(sample.Left >> 8);
 
-			buffer[i * 2] = lo;
-			buffer[i * 2 + 1] = hi;
+			var loR = (byte)sample.Right;
+			var hiR = (byte)(sample.Right >> 8);
+
+			buffer[i * 4] = loL;
+			buffer[i * 4 + 1] = hiL;
+
+			buffer[i * 4 + 2] = loR;
+			buffer[i * 4 + 3] = hiR;
 			i++;
 		}
 

@@ -22,7 +22,7 @@ internal sealed class PPU
 
 			lcdY_internal = value;
 
-			StatusLcdYCompare = LcdY == LcdYCompare;
+			StatusLcdYCompare = LcdY == LcdYCompare && ControlEnable;
 
 			if (StatusLcdYCompare && StatusLcdYCompareInterrupt)
 				dmg.InterruptController.RequestLcdStat = true;
@@ -149,6 +149,11 @@ internal sealed class PPU
 			ControlWindowEnable = (value & (1 << bitControlWindowEnable)) != 0;
 			ControlWindowTilemap = (value & (1 << bitControlWindowTilemap)) != 0;
 			ControlEnable = (value & (1 << bitControlEnable)) != 0;
+
+			if (!ControlEnable)
+			{
+				LcdY = 0;
+			}
 		}
 	}
 
