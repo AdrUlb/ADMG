@@ -15,6 +15,7 @@
 	</ItemGroup>
 
 	<PropertyGroup>
+		<PublishAot>true</PublishAot>
 		<SelfContained>false</SelfContained>
 		<StripSymbols>true</StripSymbols>
 		<IlcGenerateStackTraceData>false</IlcGenerateStackTraceData>

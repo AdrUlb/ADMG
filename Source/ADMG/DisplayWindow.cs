@@ -10,7 +10,7 @@ internal sealed class DisplayWindow : Window
 {
 	private readonly HashSet<KeyboardKey> keysDown = new();
 
-	private bool committed = false;
+	private volatile bool committed = false;
 
 	public IReadOnlySet<KeyboardKey> KeysDown => keysDown;
 
@@ -18,7 +18,7 @@ internal sealed class DisplayWindow : Window
 	private readonly Stopwatch frameTimer = Stopwatch.StartNew();
 	private readonly Color[] pixels;
 	private readonly Texture texture;
-	
+
 	public DisplayWindow(string title, int width, int height, int scale) : base(new()
 	{
 		Title = title,
@@ -32,16 +32,16 @@ internal sealed class DisplayWindow : Window
 
 	protected override void OnRender()
 	{
-		if (!committed)
-			return;
-		
-		committed = false;
+		if (committed)
+		{
+			texture.Lock();
+			for (var i = 0; i < pixels.Length; i++)
+				texture[i % texture.Width, i / texture.Width] = pixels[i];
+			texture.Unlock();
+			committed = false;
+		}
 
-		texture.Lock();
-		for (var i = 0; i < pixels.Length; i++)
-			texture[i % texture.Width, i / texture.Width] = pixels[i];
-		texture.Unlock();
-
+		Renderer.Clear(Color.Black);
 		Renderer.DrawTexture(new(0, 0), new(Size.Width, Size.Height), texture, Color.White);
 	}
 

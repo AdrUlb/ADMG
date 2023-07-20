@@ -1,8 +1,6 @@
 // https://nightshade256.github.io/2021/03/27/gb-sound-emulation.html
 
 using System.Collections.Concurrent;
-using System.Runtime.InteropServices;
-using System.Text.Json;
 using ASFW.Extension.Audio.Players;
 using ASFW.Extension.Audio.Sources;
 

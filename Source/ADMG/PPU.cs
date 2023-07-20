@@ -178,7 +178,8 @@ internal sealed class PPU
 			if (StatusLcdYCompare)
 				value |= 1 << bitStatusLcdYCompare;
 
-			value |= (byte)((int)StatusMode << bitsStatusMode);
+			if (ControlEnable)
+				value |= (byte)((int)StatusMode << bitsStatusMode);
 
 			return value;
 		}
@@ -427,7 +428,7 @@ internal sealed class PPU
 	{
 		dmg.Display.Commit();
 		
-		for (var i = 0; i < 384; i++)
+		/*for (var i = 0; i < 384; i++)
 		{
 			var tileOffset = i * 16;
 
@@ -451,6 +452,6 @@ internal sealed class PPU
 			}
 		}
 
-		dmg.VramWindow.Commit();
+		dmg.VramWindow.Commit();*/
 	}
 }

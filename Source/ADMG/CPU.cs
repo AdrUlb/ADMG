@@ -81,7 +81,6 @@ internal sealed class CPU
 		RegHL = 0x014D;
 		RegAF = 0x01B0;
 		RegSP = 0xFFFE;
-		//RegPC = 0x0100;
 	}
 	
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -29,9 +29,9 @@ internal sealed class DMG : IDisposable
 	private readonly string romFilePath;
 	
 	
-	public DMG()
+	public DMG(string romFilePath)
 	{
-		romFilePath = "/home/adrian/Roms/GB/tetris.gb";
+		this.romFilePath = romFilePath;
 		//romFilePath = "/home/adrian/Downloads/gb-test-roms-master/dmg_sound/rom_singles/09-wave read while on.gb";
 		//romFilePath = "Roms/blargg/dmg_sound.gb";
 		
@@ -70,7 +70,7 @@ internal sealed class DMG : IDisposable
 			Cartridge.LoadRam(ramFilePath);
 
 		var cpuCycles = 0;
-		
+
 		while (Display.IsRunning)
 		{
 			Asfw.DoEvents();

@@ -4,7 +4,7 @@ internal sealed class Bus
 {
 	private readonly DMG dmg;
 	private readonly byte[] bootrom;
-	private byte disbaleBootrom = 0;
+	private byte disableBootrom = 0;
 
 	private readonly byte[] temp;
 
@@ -14,14 +14,14 @@ internal sealed class Bus
 		temp = new byte[0x10000];
 		for (var i = 0; i < temp.Length; i++)
 			temp[i] = 0xFF;
-		bootrom = File.ReadAllBytes("/home/adrian/Roms/GB/bootrom.bin");
+		bootrom = File.ReadAllBytes(@"E:\roms\GB\dmg_boot.gb");
 	}
 
 	public byte this[ushort address]
 	{
 		get => address switch
 		{
-			< 0x0100 when disbaleBootrom == 0 => bootrom[address],
+			< 0x0100 when disableBootrom == 0 => bootrom[address],
 			< 0x8000 => dmg.Cartridge[address],
 			>= 0xA000 and < 0xC000 => dmg.Cartridge.ReadRam(address),
 			0xFF00 => dmg.Joypad.Control,
@@ -207,7 +207,7 @@ internal sealed class Bus
 					dmg.Ppu.WindowX = value;
 					break;
 				case 0xFF50:
-					disbaleBootrom = value;
+					disableBootrom = value;
 					break;
 				case 0xFFFF:
 					dmg.InterruptController.Enabled = value;

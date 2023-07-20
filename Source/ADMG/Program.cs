@@ -11,7 +11,7 @@ internal static class Program
 		Asfw.EnableExtension<TextAsfwExtension>();
 		Asfw.Init<DesktopASFWPlatform>();
 
-		using (var dmg = new DMG())
+		using (var dmg = new DMG(@"E:\roms\GB\Dr. Mario (World).gb"))
 			dmg.Start();
 
 		Asfw.Quit();
